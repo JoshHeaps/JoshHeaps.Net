@@ -8,10 +8,9 @@
 #WelcomeMessage {
     font: 3vw arial;
     width: auto;
-    height: 80vh;
-    max-height: 80vh;
+    height: 40vw;
+    padding-top: 20vw;
     text-align: center;
-    padding-top: 33vh;
     padding-left: 10vw;
     padding-right: 10vw;
 }
