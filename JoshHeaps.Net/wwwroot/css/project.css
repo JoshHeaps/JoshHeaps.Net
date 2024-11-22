@@ -1,0 +1,16 @@
+﻿#ProjectsBox {
+    display: grid;
+    grid-auto-rows: 1fr;
+    gap: 20vw;
+}
+
+.projectContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.displayBox {
+    width: 100vw;
+    height: auto;
+}

@@ -1,0 +1,17 @@
+﻿body {
+    margin: 0px;
+    background-color: #2b2c30;
+    color: #09ff00;
+    overflow-x: hidden;
+}
+
+#WelcomeMessage {
+    font: 3vw arial;
+    width: auto;
+    height: 80vh;
+    max-height: 80vh;
+    text-align: center;
+    padding-top: 33vh;
+    padding-left: 10vw;
+    padding-right: 10vw;
+}

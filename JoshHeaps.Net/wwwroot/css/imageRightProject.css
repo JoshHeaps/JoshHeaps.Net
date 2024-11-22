@@ -1,0 +1,32 @@
+﻿.diagonal-section-right {
+    position: absolute;
+    clip-path: polygon(40vw 0, 100% 0, 100% 100%, 15vw 100%);
+    background-color: rgb(104, 255, 0, 0.39);
+}
+
+.projectImageRight {
+    width: 33vw;
+    height: auto;
+    padding: 3vw;
+    float: right;
+}
+
+.projectTextLeft {
+    position: relative;
+    z-index: 1;
+}
+
+.projectHeaderLeft {
+    margin: 0;
+    color: rgb(212, 212, 212);
+    font-size: 4vw;
+    padding-left: 10vw;
+}
+
+.projectDescriptionLeft {
+    margin: 0;
+    color: rgb(212, 212, 212);
+    font-size: 2vw;
+    width: 40vw;
+    padding-left: 10vw;
+}
