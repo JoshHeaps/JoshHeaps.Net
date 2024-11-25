@@ -9,18 +9,52 @@
     simulateTyping(element, content);
 }
 
-function simulateTyping(element, text) {
-    let index = 0;
-    let speed = 50;
-    let currentText = "";
+let intervalId;
+let index = 0;
+const punctuation = ['.', '!', '?'];
 
-    const interval = setInterval(() => {
+let currentText = "";
+
+function changeIntervalTime(element, text) {
+    if (punctuation.includes(text.charAt(index))) {
+        clearInterval(intervalId);
+        simulateTyping(element, text, 200);
+    }
+    else {
+        clearInterval(intervalId);
+        simulateTyping(element, text);
+    }
+}
+
+function simulateTyping(element, text, speed = 50) {
+    intervalId = setInterval(() => {
         if (index < text.length) {
             currentText += text.charAt(index);
+            changeIntervalTime(element, text);
             index++;
             element.textContent = currentText;
         } else {
-            clearInterval(interval);
+            clearInterval(intervalId);
         }
     }, speed);
+}
+
+function showClickedContents(option) {
+    if (option === 'projects') {
+        document.querySelector("#ChessProject > div.diagonal-section-left").scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+            inline: "nearest"
+        });
+    }
+    else if (option === 'contact') {
+        navigator.clipboard.writeText('435-890-2957').then(() => {
+            console.log('copied');
+        });
+        document.querySelector("#Contacts").scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+            inline: "nearest"
+        });
+    }
 }

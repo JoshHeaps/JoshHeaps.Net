@@ -3,14 +3,32 @@
     background-color: #2b2c30;
     color: #09ff00;
     overflow-x: hidden;
+    cursor: default;
+}
+
+#Header {
+    margin-top: 2vw;
+}
+
+.headerOption {
+    font: bold 2vw arial;
+    display: inline;
+    margin-left: 10vw;
+    cursor: pointer;
+    transition: color 0.5s ease, font 0.5s ease;
+}
+
+.headerOption:hover {
+    font: bold 2.3vw arial;
+    transition: color 0.5s ease, font 0.5s ease;
 }
 
 #WelcomeMessage {
     font: 3vw arial;
     width: auto;
     height: 40vw;
-    padding-top: 20vw;
-    text-align: center;
+    margin-top: 15vw;
+    text-align: left;
     padding-left: 10vw;
     padding-right: 10vw;
 }

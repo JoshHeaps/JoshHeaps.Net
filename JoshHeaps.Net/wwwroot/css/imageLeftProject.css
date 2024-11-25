@@ -2,12 +2,18 @@
     position: absolute;
     clip-path: polygon(0 0, 85vw 0, 60vw 100%, 0 100%);
     background-color: rgb(104, 255, 0, 0.39);
+    transition: clip-path 0.5s ease;
+}
+
+.diagonal-section-left:has(.projectImage:hover) {
+    clip-path: polygon(0 0, 87vw 0, 58vw 100%, 0 100%);
+    transition: clip-path 0.5s ease;
 }
 
 .projectImageLeft {
     width: 33vw;
     height: auto;
-    padding: 3vw;
+    margin: 3vw;
 }
 
 .projectTextRight {

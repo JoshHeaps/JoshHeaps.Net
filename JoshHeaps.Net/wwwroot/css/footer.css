@@ -1,0 +1,17 @@
+﻿#Contacts {
+    margin-top: 20vw;
+}
+
+.social-icon {
+    height: auto;
+    width: 3.5vw;
+    margin-bottom: 5vw;
+    margin-left: 3vw;
+    fill: rgb(212, 212, 212);
+    transition: fill 0.5s;
+}
+
+.social-icon:hover {
+    fill: white;
+    transition: fill 0.5s;
+}
