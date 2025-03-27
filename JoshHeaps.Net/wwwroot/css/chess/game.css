@@ -38,3 +38,7 @@
     box-sizing: border-box;
     cursor: pointer;
 }
+
+#chessBoard.flipped {
+    transform: rotate(180deg);
+}

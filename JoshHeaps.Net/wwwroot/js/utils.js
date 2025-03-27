@@ -57,4 +57,11 @@ function showClickedContents(option) {
             inline: "nearest"
         });
     }
+    else if (option === 'demos') {
+        document.querySelector("#DemosBox").scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+            inline: "nearest"
+        });
+    }
 }

@@ -1,5 +1,6 @@
 ﻿let currentGameId = null;
 let currentPlayerId = null;
+let currentPlayerIsWhite = null;
 let signalRConnection = null;
 let selectedPiece = null;
 let legalMoves = [];
@@ -17,6 +18,7 @@ async function startNewGame() {
 
     currentGameId = gameData.gameId;
     currentPlayerId = gameData.id;
+    currentPlayerIsWhite = gameData.isWhite;
     console.log("🆕 Game started:", currentGameId);
 
     // Build and start SignalR connection
@@ -50,6 +52,7 @@ async function startNewGame() {
     // Render initial state
     const gameState = await fetch(`/api/chess/${currentGameId}`);
     const data = await gameState.json();
+    
     renderPieces(data.pieces);
 }
 
@@ -62,7 +65,9 @@ function renderPieces(pieces) {
 
     // Place each piece
     pieces.forEach(piece => {
-        const index = piece.row * 8 + piece.col;
+        const [r, c] = flipCoordinates(piece.row, piece.col);
+
+        const index = r * 8 + c;
         const square = document.getElementById(`square-${index}`);
         if (!square) return;
 
@@ -122,12 +127,15 @@ async function handlePieceClick(piece) {
 }
 
 function highlightSelected(row, col) {
-    document.getElementById(`square-${row * 8 + col}`).classList.add("selected");
+    const [r, c] = flipCoordinates(row, col);
+    const index = r * 8 + c;
+    document.getElementById(`square-${index}`).classList.add("selected");
 }
 
 function highlightLegalMoves(moves) {
     moves.forEach(move => {
-        const index = move.row * 8 + move.col;
+        const [r, c] = flipCoordinates(move.row, move.col);
+        const index = r * 8 + c;
         const square = document.getElementById(`square-${index}`);
         square.classList.add("legal");
 
@@ -136,12 +144,14 @@ function highlightLegalMoves(moves) {
         if (img) img.onclick = null;
 
         // Let the square itself handle the move
-        square.onclick = () => handleMove(move.row, move.col);
+        square.onclick = () => handleMove(r, c);
     });
 }
 
 async function handleMove(targetRow, targetCol) {
     if (!selectedPiece) return;
+
+    [targetRow, targetCol] = flipCoordinates(targetRow, targetCol);
 
     const moveDto = {
         GameId: currentGameId,
@@ -213,6 +223,13 @@ function alertGameStatusChange(moveResultDto) {
             gameOver = true;
         }
     }, 500);
+}
+
+function flipCoordinates(row, col) {
+    if (!currentPlayerIsWhite) {
+        return [7 - row, 7 - col];
+    }
+    return [row, col];
 }
 
 console.log("chessLogic.js loaded");

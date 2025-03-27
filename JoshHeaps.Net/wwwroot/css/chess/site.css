@@ -13,6 +13,7 @@
     border: 0px;
     cursor: pointer;
     order: 1;
+    padding: 2vh;
 }
 
 #chessContainer {
@@ -49,6 +50,7 @@
     flex-direction: column;
     order: -1;
     flex-shrink: 1;
+    font-size: large
 }
 
 #buttonContainer {
@@ -88,6 +90,7 @@
         grid-row: 1;
         grid-column: 2;
         text-align: center;
+        font-size: x-large;
     }
 
     #buttonContainer {
@@ -95,6 +98,11 @@
         grid-column: 2;
         text-align: left;
         align-self: start;
+    }
+
+    #startGameBtn {
+        padding: 1vw;
+        font-size: large;
     }
 
     #chessBoard {

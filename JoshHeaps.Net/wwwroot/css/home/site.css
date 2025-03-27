@@ -32,3 +32,36 @@
     padding-left: 10vw;
     padding-right: 10vw;
 }
+
+#DemosBox {
+    margin: 10vw;
+    display: flex;
+    flex-direction: column;
+    justify-content: end;
+    width: 80%;
+}
+
+#DemoHeader {
+    margin: 0;
+    color: rgb(212, 212, 212);
+    font-size: 4vw;
+}
+
+.demoButton {
+    margin-top: 5vw;
+    margin-right: 2vw;
+    padding-top: 0.5vw;
+    padding-bottom: 0.5vw;
+    text-align: center;
+    border: none;
+    border-radius: 5vw;
+    width: 25vw;
+    height: 10vw;
+    font-size: 2vw;
+    background-color: rgb(104, 255, 0, 0.39);
+    cursor: pointer;
+}
+
+#MoreFiller {
+    cursor: default;
+}

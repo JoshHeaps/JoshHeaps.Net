@@ -7,7 +7,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 var configuration = builder.Configuration;
-_ = Run(configuration);
+Task updateIpTask;
+
+if (!builder.Environment.IsDevelopment())
+    updateIpTask = Run(configuration);
 
 builder.Services.AddControllers();
 
