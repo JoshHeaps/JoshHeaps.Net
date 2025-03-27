@@ -1,0 +1,37 @@
+﻿@page
+@model JoshHeaps.Net.Pages.ChessModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Chess";
+}
+
+<div id="chessContainer">
+    <div id="boardContainer">
+        <div id="chessBoard">
+            <!-- Placeholder squares -->
+            @for (int i = 0; i < 64; i++)
+            {
+                <div id="square-@i" class="chessSquare @( (i + i / 8) % 2 == 0 ? "light" : "dark" )"></div>
+            }
+        </div>
+    </div>
+
+    <div id="textContainer" class="sideContent">
+        <h1>Chess Arena</h1>
+        <p>This page will host your chess UI and interactions.</p>
+    </div>
+
+    <div id="buttonContainer" class="sideContent">
+        <button id="startGameBtn" onclick="startNewGame()">Start New Game</button>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/signalr/signalr.min.js"></script>
+    <script src="~/js/ChessScripts/chessLogic.js"></script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/chess/game.css?v=@ViewData["cssVersion"]" />
+    <link rel="stylesheet" href="~/css/chess/site.css?v=@ViewData["cssVersion"]" />
+}

@@ -1,0 +1,219 @@
+﻿let currentGameId = null;
+let currentPlayerId = null;
+let signalRConnection = null;
+let selectedPiece = null;
+let legalMoves = [];
+
+async function startNewGame() {
+    // Stop previous SignalR connection if needed
+    if (signalRConnection) {
+        await signalRConnection.stop();
+        signalRConnection = null;
+    }
+
+    // Join the game via API
+    const response = await fetch('/api/chess/JoinGame');
+    const gameData = await response.json();
+
+    currentGameId = gameData.gameId;
+    currentPlayerId = gameData.id;
+    console.log("🆕 Game started:", currentGameId);
+
+    // Build and start SignalR connection
+    signalRConnection = new signalR.HubConnectionBuilder()
+        .withUrl("/chessHub")
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
+
+    signalRConnection.onclose(err => {
+        console.error("❌ SignalR connection closed:", err?.message);
+    });
+
+    signalRConnection.on("ReceiveMoveUpdate", async (gameId, moveResultDto) => {
+        if (gameId !== currentGameId) return;
+
+        const res = await fetch(`/api/chess/${gameId}`);
+        const data = await res.json();
+        renderPieces(data.pieces);
+
+        alertGameStatusChange(moveResultDto);
+    });
+
+    try {
+        await signalRConnection.start();
+        console.log("✅ SignalR connected");
+        await signalRConnection.invoke("JoinWebsocketGroup", currentGameId);
+    } catch (err) {
+        console.error("❌ SignalR failed to start or join:", err);
+    }
+
+    // Render initial state
+    const gameState = await fetch(`/api/chess/${currentGameId}`);
+    const data = await gameState.json();
+    renderPieces(data.pieces);
+}
+
+function renderPieces(pieces) {
+    // Clear all squares
+    for (let i = 0; i < 64; i++) {
+        const square = document.getElementById(`square-${i}`);
+        square.innerHTML = ""; // Remove any previous images
+    }
+
+    // Place each piece
+    pieces.forEach(piece => {
+        const index = piece.row * 8 + piece.col;
+        const square = document.getElementById(`square-${index}`);
+        if (!square) return;
+
+        const img = document.createElement("img");
+        img.src = getPieceImageUrl(piece);
+        img.alt = piece.type;
+        img.classList.add("chessPiece");
+
+        img.onclick = (e) => {
+            e.stopPropagation(); // 👈 Prevents the parent square click from firing
+            handlePieceClick(piece);
+            console.log("Clicked on:", piece);
+        };
+
+        square.appendChild(img);
+    });
+
+    for (let i = 0; i < 64; i++) {
+        const square = document.getElementById(`square-${i}`);
+
+        if (!square.classList.contains("legal")) {
+            square.onclick = () => clearHighlights();
+        }
+    }
+}
+
+function getPieceImageUrl(piece) {
+    const basePath = "/images/Chess Images/";
+    const color = piece.color === 0 ? "White" : "Black"; // Or use "White"/"Black" if string
+    const typeMap = {
+        0: "Pawn",
+        1: "Rook",
+        2: "Knight",
+        3: "Bishop",
+        4: "Queen",
+        5: "King"
+    };
+
+    return basePath + color + typeMap[piece.type] + ".svg";
+}
+
+async function handlePieceClick(piece) {
+    clearHighlights();
+
+    selectedPiece = piece;
+
+    try {
+        const res = await fetch(`/api/chess/${currentGameId}/legalMoves/${piece.id}`);
+        if (!res.ok) throw new Error("API failed");
+
+        legalMoves = await res.json();
+        highlightSelected(piece.row, piece.col);
+        highlightLegalMoves(legalMoves);
+    } catch (err) {
+        console.error("Error in handlePieceClick:", err);
+    }
+}
+
+function highlightSelected(row, col) {
+    document.getElementById(`square-${row * 8 + col}`).classList.add("selected");
+}
+
+function highlightLegalMoves(moves) {
+    moves.forEach(move => {
+        const index = move.row * 8 + move.col;
+        const square = document.getElementById(`square-${index}`);
+        square.classList.add("legal");
+
+        // Remove click from piece (if present) so square click handles it
+        const img = square.querySelector("img");
+        if (img) img.onclick = null;
+
+        // Let the square itself handle the move
+        square.onclick = () => handleMove(move.row, move.col);
+    });
+}
+
+async function handleMove(targetRow, targetCol) {
+    if (!selectedPiece) return;
+
+    const moveDto = {
+        GameId: currentGameId,
+        PlayerId: currentPlayerId,
+        PieceId: selectedPiece.id,
+        SourceRow: selectedPiece.row,
+        SourceCol: selectedPiece.col,
+        TargetRow: targetRow,
+        TargetCol: targetCol,
+        PromotionChoice: null // optional
+    };
+
+    const res = await fetch("/api/chess/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(moveDto)
+    });
+
+    const moveResultDto = await res.json();
+
+    if (!res.ok || !moveResultDto.success) {
+        alert("❌ " + (moveResultDto.message || "Invalid move or not your turn."));
+        return;
+    }
+
+    const updatedGame = await fetch(`/api/chess/${currentGameId}`).then(r => r.json());
+    renderPieces(updatedGame.pieces);
+
+    // Reset state
+    selectedPiece = null;
+    legalMoves = [];
+    clearHighlights();
+    await signalRConnection.invoke("MoveMade", currentGameId, moveResultDto);
+
+    alertGameStatusChange(moveResultDto);
+}
+
+function clearHighlights() {
+    for (let i = 0; i < 64; i++) {
+        const square = document.getElementById(`square-${i}`);
+
+        // Remove legal move markers and their onclicks
+        if (square.classList.contains("legal")) {
+            square.classList.remove("legal");
+            square.onclick = null;
+        }
+
+        // Always remove selection styling
+        square.classList.remove("selected");
+    }
+
+    selectedPiece = null;
+    legalMoves = [];
+}
+
+function alertGameStatusChange(moveResultDto) {
+    setTimeout(() => {
+        // 🟡 Optional: show check
+        if (moveResultDto.isCheck) {
+            console.log("🛑 Check!");
+        }
+
+        // ✅ Handle game end
+        if (moveResultDto.isCheckmate) {
+            alert("♟️ Checkmate!");
+            gameOver = true;
+        } else if (moveResultDto.isStalemate) {
+            alert("🤝 Stalemate!");
+            gameOver = true;
+        }
+    }, 500);
+}
+
+console.log("chessLogic.js loaded");
+window.startNewGame = startNewGame;

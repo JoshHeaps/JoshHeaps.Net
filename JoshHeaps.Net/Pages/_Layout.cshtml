@@ -1,0 +1,28 @@
+﻿@{
+    Layout = null;
+    ViewData["cssVersion"] = "1.0.0"; // <--- change this once to bust cache
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    @RenderSection("Styles", required: false)
+    @RenderSection("Scripts", required: false)
+</head>
+<body>
+    <header>
+        <!-- optional header markup -->
+    </header>
+
+    <main role="main">
+        @RenderBody()
+    </main>
+
+    <footer>
+        <!-- optional footer markup -->
+    </footer>
+</body>
+</html>

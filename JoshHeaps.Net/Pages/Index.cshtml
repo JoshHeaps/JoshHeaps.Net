@@ -1,79 +1,98 @@
 ﻿@page
 @model JoshHeaps.Net.Pages.IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "JoshHeaps.Net";
+    Layout = "_Layout";
 }
 
-<html lang="en-us">
-    <head>
-        <title>JoshHeaps.Net</title>
-        <script src="/js/site.js"></script>
-        <script src="/js/utils.js"></script>
-        <script src="/js/opacityUpdateObserver.js"></script>
-        <link href="/css/site.css" rel="stylesheet" type="text/css"/>
-        <link href="/css/project.css" rel="stylesheet" type="text/css"/>
-        <link href="/css/imageLeftProject.css" rel="stylesheet" type="text/css"/>
-        <link href="/css/imageRightProject.css" rel="stylesheet" type="text/css"/>
-        <link href="/css/footer.css" rel="stylesheet" type="text/css"/>
-    </head>
-    <body>
-        <div id="Header">
-            <a class="headerOption" onclick="showClickedContents('projects')">./ Projects</a>
-            <a class="headerOption" onclick="showClickedContents('contact')">./ Contact me</a>
-        </div>
+<div id="Header">
+    <a class="headerOption" onclick="showClickedContents('projects')">./ Projects</a>
+    <a class="headerOption" onclick="showClickedContents('contact')">./ Contact me</a>
+</div>
 
-        <div id="WelcomeMessage"></div>
+<div id="WelcomeMessage"></div>
 
-        <div id="ProjectsBox">
-            <div id="ChessProject" class="projectContainer">
-                <div class="displayBox diagonal-section-left">
-                    <a target="_blank" href="https://github.com/JoshHeaps/OnlineChess">
-                        <img id="ChessImage" class="projectImage projectImageLeft" src="/images/Chess.jpg" title="Chessboard"/>
-                    </a>
-                </div>
-                <div id="ChessText" class="projectTextRight">
-                    <h2 id="ChessTitle" class="projectHeaderRight projectHeader">Chess</h2>
-                    <p id="ChessDescription" class="projectDescriptionRight projectDescription">
-                        As someone who loves chess, I wanted to create a chess game that I could play with my friends and family. This project is a work in progress, as currently it can only be played locally. It was built in C# on .NET 8.0, using winforms, because I like a challenge. I plan to add online multiplayer functionality in the future.
-                    </p>
-                </div>
-            </div>
-
-            <div id="CompilerProject" class="projectContainer">
-                <div id="CompilerText" class="projectTextLeft">
-                    <h2 id="CompilerTitle" class="projectHeaderLeft projectHeader">Compiler</h2>
-                    <p id="CompilerDescription" class="projectDescriptionLeft projectDescription">
-                        I love solving problems, and figuring out how things work. What better way to do both than writing a compiler myself? This project is a compiler that I wrote in C# on .NET 8.0. It takes in a simple language that I created, outputs the corresponding common intermediate language (CIL), and executes it. I plan to add more features in the future.
-                    </p>
-                </div>
-                <div class="displayBox diagonal-section-right">
-                    <a target="_blank" href="https://github.com/JoshHeaps/CILCompiler">
-                        <img id="CompilerImage" class="projectImage projectImageRight" src="/images/CompilerDemo.png" title="Compiler Input and Output"/>
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div id="Contacts">
-            <a id="GithubLink" class="social-link" href="https://github.com/JoshHeaps" target="_blank">
-                <svg viewBox="0 0 16 16" class="social-icon">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                </svg>
-            </a>
-            <a id="LinkedinLink" class="social-link" href="https://www.linkedin.com/in/josh-heaps/" target="_blank">
-                <svg viewBox="0 0 24 24" class="social-icon">
-                    <path d="M20.5 2h-17A1.5 1.5 0 002 3.5v17A1.5 1.5 0 003.5 22h17a1.5 1.5 0 001.5-1.5v-17A1.5 1.5 0 0020.5 2zM8 19H5v-9h3zM6.5 8.25A1.75 1.75 0 118.3 6.5a1.78 1.78 0 01-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0013 14.19a.66.66 0 000 .14V19h-3v-9h2.9v1.3a3.11 3.11 0 012.7-1.4c1.55 0 3.36.86 3.36 3.66z"></path>
-                </svg>
-            </a>
-            <a id="GmailLink" class="social-link" href="mailto:joheaps98@gmail.com">
-            <svg viewBox="0 -4 31 31" class="social-icon" preserveAspectRatio="none">
-                    <path d="m0 3.23863636v2.72727273l3.12784091 3.02727273 3.69034091 2.08636368.68181818-4.59034095-.68181818-4.27329546-1.90909091-1.43181818c-2.02329546-1.51704546-4.90909091-.07329545-4.90909091 2.45454545"/>
-                    <path d="m23.1818182 2.21590909-.6818182 4.32954546.6818182 4.53409095 3.3494318-1.65852277 3.46875-3.45511364v-2.72727273c0-2.5278409-2.8857955-3.97159091-4.9090909-2.45454545z"/>
-                    <path d="m2.04545455 22.6704545h4.77272727v-11.590909l-6.81818182-5.11363641v14.65909091c0 1.1301136.91534091 2.0454545 2.04545455 2.0454545"/>
-                    <path d="m23.1818182 22.6704545h4.7727273c1.1301136 0 2.0454545-.9153409 2.0454545-2.0454545v-14.65909091l-6.8181818 5.11363641z"/>
-                    <path d="m15 8.35227273-8.18181818-6.13636364v8.86363641l8.18181818 6.1363636 8.1818182-6.1363636v-8.86363641z"/>
-                </svg>
+<div id="ProjectsBox">
+    <div id="ChessProject" class="projectContainer">
+        <div class="displayBox diagonal-section-left">
+            <a target="_blank" href="https://github.com/JoshHeaps/OnlineChess">
+                <img id="ChessImage" class="projectImage projectImageLeft" src="/images/Chess.jpg" title="Chessboard"/>
             </a>
         </div>
-    </body>
-</html>
+        <div id="ChessText" class="projectTextRight">
+            <h2 id="ChessTitle" class="projectHeaderRight projectHeader">Chess</h2>
+            <p id="ChessDescription" class="projectDescriptionRight projectDescription">
+                As someone who loves chess, I wanted to create a chess game that I could play with my friends and family. This project is a work in progress, as currently it can only be played locally. It was built in C# on .NET 8.0, using winforms, because I like a challenge. I plan to add online multiplayer functionality in the future.
+            </p>
+        </div>
+    </div>
+
+    <div id="CompilerProject" class="projectContainer">
+        <div id="CompilerText" class="projectTextLeft">
+            <h2 id="CompilerTitle" class="projectHeaderLeft projectHeader">Compiler</h2>
+            <p id="CompilerDescription" class="projectDescriptionLeft projectDescription">
+                I love solving problems, and figuring out how things work. What better way to do both than writing a compiler myself? This project is a compiler that I wrote in C# on .NET 8.0. It takes in a simple language that I created, outputs the corresponding common intermediate language (CIL), and executes it. I plan to add more features in the future.
+            </p>
+        </div>
+        <div class="displayBox diagonal-section-right">
+            <a target="_blank" href="https://github.com/JoshHeaps/CILCompiler">
+                <img id="CompilerImage" class="projectImage projectImageRight" src="/images/CompilerDemo.png" title="Compiler Input and Output"/>
+            </a>
+        </div>
+    </div>
+
+    <div id="ChessProject" class="projectContainer">
+        <div class="displayBox diagonal-section-left">
+            <a target="_blank" href="https://github.com/JoshHeaps/OnlineChess">
+                <img id="ChessImage" class="projectImage projectImageLeft" src="/images/Chess.jpg" title="Chessboard"/>
+            </a>
+        </div>
+        <div id="ChessText" class="projectTextRight">
+            <h2 id="ChessTitle" class="projectHeaderRight projectHeader">Chess</h2>
+            <p id="ChessDescription" class="projectDescriptionRight projectDescription">
+                As someone who loves chess, I wanted to create a chess game that I could play with my friends and family. This project is a work in progress, as currently it can only be played locally. It was built in C# on .NET 8.0, using winforms, because I like a challenge. I plan to add online multiplayer functionality in the future.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div id="Contacts">
+    <svg viewBox="0 0 16 16" class="social-icon">
+        <a id="GithubLink" class="social-link" href="https://github.com/JoshHeaps" target="_blank">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+            <rect width="100%" height="100%" fill="transparent" />
+        </a>
+    </svg>
+            
+    <svg viewBox="0 0 24 24" class="social-icon">
+        <a id="LinkedinLink" class="social-link" href="https://www.linkedin.com/in/josh-heaps/" target="_blank">
+            <path d="M20.5 2h-17A1.5 1.5 0 002 3.5v17A1.5 1.5 0 003.5 22h17a1.5 1.5 0 001.5-1.5v-17A1.5 1.5 0 0020.5 2zM8 19H5v-9h3zM6.5 8.25A1.75 1.75 0 118.3 6.5a1.78 1.78 0 01-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0013 14.19a.66.66 0 000 .14V19h-3v-9h2.9v1.3a3.11 3.11 0 012.7-1.4c1.55 0 3.36.86 3.36 3.66z"></path>
+            <rect width="100%" height="100%" fill="transparent" />
+        </a>
+    </svg>
+            
+    <svg viewBox="0 -4 31 31" class="social-icon" preserveAspectRatio="none">
+        <a id="GmailLink" class="social-link" href="mailto:joheaps98@gmail.com">
+            <path d="m0 3.23863636v2.72727273l3.12784091 3.02727273 3.69034091 2.08636368.68181818-4.59034095-.68181818-4.27329546-1.90909091-1.43181818c-2.02329546-1.51704546-4.90909091-.07329545-4.90909091 2.45454545"/>
+            <path d="m23.1818182 2.21590909-.6818182 4.32954546.6818182 4.53409095 3.3494318-1.65852277 3.46875-3.45511364v-2.72727273c0-2.5278409-2.8857955-3.97159091-4.9090909-2.45454545z"/>
+            <path d="m2.04545455 22.6704545h4.77272727v-11.590909l-6.81818182-5.11363641v14.65909091c0 1.1301136.91534091 2.0454545 2.04545455 2.0454545"/>
+            <path d="m23.1818182 22.6704545h4.7727273c1.1301136 0 2.0454545-.9153409 2.0454545-2.0454545v-14.65909091l-6.8181818 5.11363641z"/>
+            <path d="m15 8.35227273-8.18181818-6.13636364v8.86363641l8.18181818 6.1363636 8.1818182-6.1363636v-8.86363641z"/>
+            <rect width="100%" height="100%" fill="transparent" />
+        </a>
+    </svg>
+</div>
+
+@section Styles {
+    <link href="/css/home/site.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+    <link href="/css/home/project.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+    <link href="/css/home/imageLeftProject.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+    <link href="/css/home/imageRightProject.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+    <link href="/css/home/footer.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+}
+
+@section Scripts {
+    <script src="/js/site.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/opacityUpdateObserver.js"></script>
+}
