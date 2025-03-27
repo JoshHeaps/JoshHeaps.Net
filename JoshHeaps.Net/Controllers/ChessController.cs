@@ -67,6 +67,8 @@ public class ChessController : ControllerBase
             isWhite = false;
         }
 
+        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
+
         return Ok(new
         {
             Id = playerId,
@@ -146,12 +148,12 @@ public class ChessController : ControllerBase
         if (result.IsCheckmate || result.IsStalemate)
         {
             // queue game removal
-            _gameRemovalTasks.TryAdd(moveDto.GameId, Task.Run(async () =>
-            {
-                await Task.Delay(TimeSpan.FromMinutes(1));
-                _games.Remove(moveDto.GameId, out _);
-                _gameRemovalTasks.Remove(moveDto.GameId, out _);
-            }));
+            ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(1));
+        }
+        else
+        {
+            // increase timeout if play continues.
+            ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
         }
 
         return Ok(result);
@@ -188,5 +190,27 @@ public class ChessController : ControllerBase
             });
 
         return Ok(allMoves);
+    }
+
+    private static void ScheduleRemoveGame(Guid id, TimeSpan delay)
+    {
+        if (_gameRemovalTasks.ContainsKey(id))
+        {
+            _gameRemovalTasks[id] = Task.Run(async () =>
+            {
+                await Task.Delay(delay);
+                _games.Remove(id, out _);
+                _gameRemovalTasks.Remove(id, out _);
+            });
+
+            return;
+        }
+
+        _gameRemovalTasks.TryAdd(id, Task.Run(async () =>
+        {
+            await Task.Delay(delay);
+            _games.Remove(id, out _);
+            _gameRemovalTasks.Remove(id, out _);
+        }));
     }
 }

@@ -4,6 +4,8 @@ let currentPlayerIsWhite = null;
 let signalRConnection = null;
 let selectedPiece = null;
 let legalMoves = [];
+let previousMoveStart = null;
+let previousMoveEnd = null;
 
 async function startNewGame() {
     // Stop previous SignalR connection if needed
@@ -19,35 +21,15 @@ async function startNewGame() {
     currentGameId = gameData.gameId;
     currentPlayerId = gameData.id;
     currentPlayerIsWhite = gameData.isWhite;
+    previousMoveStart = null;
+    previousMoveEnd = null;
+    document.cookie = `chessGameId=${currentGameId}; path=/; max-age=86400`; // expires in 1 day
+    document.cookie = `chessPlayerId=${currentPlayerId}; path=/; max-age=86400`;
+    document.cookie = `chessPlayerIsWhite=${currentPlayerIsWhite}; path=/; max-age=86400`
     console.log("🆕 Game started:", currentGameId);
 
     // Build and start SignalR connection
-    signalRConnection = new signalR.HubConnectionBuilder()
-        .withUrl("/chessHub")
-        .configureLogging(signalR.LogLevel.Information)
-        .build();
-
-    signalRConnection.onclose(err => {
-        console.error("❌ SignalR connection closed:", err?.message);
-    });
-
-    signalRConnection.on("ReceiveMoveUpdate", async (gameId, moveResultDto) => {
-        if (gameId !== currentGameId) return;
-
-        const res = await fetch(`/api/chess/${gameId}`);
-        const data = await res.json();
-        renderPieces(data.pieces);
-
-        alertGameStatusChange(moveResultDto);
-    });
-
-    try {
-        await signalRConnection.start();
-        console.log("✅ SignalR connected");
-        await signalRConnection.invoke("JoinWebsocketGroup", currentGameId);
-    } catch (err) {
-        console.error("❌ SignalR failed to start or join:", err);
-    }
+    await setupSignalRConnection();
 
     // Render initial state
     const gameState = await fetch(`/api/chess/${currentGameId}`);
@@ -87,10 +69,22 @@ function renderPieces(pieces) {
 
     for (let i = 0; i < 64; i++) {
         const square = document.getElementById(`square-${i}`);
+        square.classList.remove("previous-start", "previous-end");
 
         if (!square.classList.contains("legal")) {
             square.onclick = () => clearHighlights();
         }
+    }
+
+    if (previousMoveStart && previousMoveEnd) {
+        const [startRow, startCol] = flipCoordinates(...previousMoveStart);
+        const [endRow, endCol] = flipCoordinates(...previousMoveEnd);
+
+        const startIndex = startRow * 8 + startCol;
+        const endIndex = endRow * 8 + endCol;
+
+        document.getElementById(`square-${startIndex}`)?.classList.add("previous-start");
+        document.getElementById(`square-${endIndex}`)?.classList.add("previous-end");
     }
 }
 
@@ -164,6 +158,9 @@ async function handleMove(targetRow, targetCol) {
         PromotionChoice: null // optional
     };
 
+    previousMoveStart = [selectedPiece.row, selectedPiece.col];
+    previousMoveEnd = [targetRow, targetCol];
+
     const res = await fetch("/api/chess/move", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -184,7 +181,7 @@ async function handleMove(targetRow, targetCol) {
     selectedPiece = null;
     legalMoves = [];
     clearHighlights();
-    await signalRConnection.invoke("MoveMade", currentGameId, moveResultDto);
+    await signalRConnection.invoke("MoveMade", currentGameId, moveDto, moveResultDto);
 
     alertGameStatusChange(moveResultDto);
 }
@@ -208,7 +205,8 @@ function clearHighlights() {
 }
 
 function alertGameStatusChange(moveResultDto) {
-    setTimeout(() => {
+    setTimeout(async () => {
+        let gameOver = false;
         // 🟡 Optional: show check
         if (moveResultDto.isCheck) {
             console.log("🛑 Check!");
@@ -222,6 +220,12 @@ function alertGameStatusChange(moveResultDto) {
             alert("🤝 Stalemate!");
             gameOver = true;
         }
+
+        if (gameOver) {
+            await signalRConnection.invoke("LeaveWebsocketGroup", currentGameId);
+            await signalRConnection.stop();
+            signalRConnection = null;
+        }
     }, 500);
 }
 
@@ -232,5 +236,68 @@ function flipCoordinates(row, col) {
     return [row, col];
 }
 
+function getCookie(name) {
+    const value = document.cookie.split('; ')
+        .find(row => row.startsWith(name + '='));
+    return value ? value.split('=')[1] : null;
+}
+
+async function setupSignalRConnection() {
+    signalRConnection = new signalR.HubConnectionBuilder()
+        .withUrl("/chessHub")
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
+
+    signalRConnection.onclose(err => {
+        console.error("❌ SignalR connection closed:", err?.message);
+    });
+
+    signalRConnection.on("ReceiveMoveUpdate", async (gameId, moveDto, moveResultDto) => {
+        if (gameId !== currentGameId) return;
+
+        const res = await fetch(`/api/chess/${gameId}`);
+        const data = await res.json();
+        previousMoveStart = [moveDto.sourceRow, moveDto.sourceCol];
+        previousMoveEnd = [moveDto.targetRow, moveDto.targetCol];
+        renderPieces(data.pieces);
+
+        alertGameStatusChange(moveResultDto);
+    });
+
+    try {
+        await signalRConnection.start();
+        console.log("✅ SignalR connected");
+        await signalRConnection.invoke("JoinWebsocketGroup", currentGameId);
+    } catch (err) {
+        console.error("❌ SignalR failed to start or join:", err);
+    }
+}
+
 console.log("chessLogic.js loaded");
 window.startNewGame = startNewGame;
+
+window.addEventListener('load', async () => {
+    const savedGameId = getCookie("chessGameId");
+    const savedPlayerId = getCookie("chessPlayerId");
+    const savedPlayerIsWhite = getCookie("chessPlayerIsWhite");
+
+    if (savedGameId && savedPlayerId) {
+        try {
+            const response = await fetch(`/api/chess/${savedGameId}`);
+            if (response.ok) {
+                console.log("🧠 Rejoining saved game...");
+                currentGameId = savedGameId;
+                currentPlayerId = savedPlayerId;
+                currentPlayerIsWhite = (savedPlayerIsWhite === "true");
+
+                await setupSignalRConnection(); // use your existing SignalR connect logic
+                const gameData = await response.json();
+                renderPieces(gameData.pieces);
+            } else {
+                console.warn("Saved game not found or expired.");
+            }
+        } catch (err) {
+            console.error("Failed to rejoin saved game:", err);
+        }
+    }
+});
