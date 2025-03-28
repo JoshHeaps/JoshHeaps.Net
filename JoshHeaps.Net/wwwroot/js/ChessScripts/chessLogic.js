@@ -137,6 +137,10 @@ function highlightLegalMoves(moves) {
         const img = square.querySelector("img");
         if (img) img.onclick = null;
 
+        let overlay = document.createElement("div");
+        overlay.className = "legalOverlay";
+        square.appendChild(overlay);
+
         // Let the square itself handle the move
         square.onclick = () => handleMove(r, c);
     });
@@ -144,6 +148,18 @@ function highlightLegalMoves(moves) {
 
 async function handleMove(targetRow, targetCol) {
     if (!selectedPiece) return;
+
+    const isPawn = selectedPiece.type === 0; // Assuming 0 = pawn
+    const reachedEnd = (Number(selectedPiece.color) === 0 && Number(targetRow) === 0) ||
+        (Number(selectedPiece.color) === 1 && Number(targetRow) === 0);
+
+    let choice = null;
+
+    if (isPawn && reachedEnd) {
+        // Show promotion UI
+        choice = await promptPromotion(); // function you’ll define
+        if (!choice) return; // user cancelled?
+    }
 
     [targetRow, targetCol] = flipCoordinates(targetRow, targetCol);
 
@@ -155,7 +171,7 @@ async function handleMove(targetRow, targetCol) {
         SourceCol: selectedPiece.col,
         TargetRow: targetRow,
         TargetCol: targetCol,
-        PromotionChoice: null // optional
+        PromotionChoice: choice
     };
 
     previousMoveStart = [selectedPiece.row, selectedPiece.col];
@@ -189,6 +205,10 @@ async function handleMove(targetRow, targetCol) {
 function clearHighlights() {
     for (let i = 0; i < 64; i++) {
         const square = document.getElementById(`square-${i}`);
+
+        // Remove legal overlays
+        const overlay = square.querySelector(".legalOverlay");
+        if (overlay) square.removeChild(overlay);
 
         // Remove legal move markers and their onclicks
         if (square.classList.contains("legal")) {
@@ -271,6 +291,32 @@ async function setupSignalRConnection() {
     } catch (err) {
         console.error("❌ SignalR failed to start or join:", err);
     }
+}
+
+function promptPromotion() {
+    return new Promise(resolve => {
+
+        let color = 1;
+        if (currentPlayerIsWhite)
+            color = 0;
+
+        updatePromotionModalImages(color);
+
+        document.getElementById("promotionModal").style.display = "block";
+        window.selectPromotion = (piece) => {
+            document.getElementById("promotionModal").style.display = "none";
+            resolve(piece);
+        };
+    });
+}
+
+function updatePromotionModalImages(color) {
+    const pieceNames = ["Queen", "Rook", "Bishop", "Knight"];
+    const buttons = document.querySelectorAll("#promotionModal button img");
+
+    buttons.forEach((img, index) => {
+        img.src = `/images/Chess Images/${color === 0 ? "White" : "Black"}${pieceNames[index]}.svg`;
+    });
 }
 
 console.log("chessLogic.js loaded");

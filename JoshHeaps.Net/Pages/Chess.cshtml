@@ -26,6 +26,24 @@
     </div>
 </div>
 
+<div id="promotionModal" style="display: none;">
+    <p>Promote your pawn to:</p>
+    <div id="promotionBtnContainer">
+        <button onclick="selectPromotion(4)">
+            <img src="/images/Chess Images/WhiteQueen.svg" alt="Queen" />
+        </button>
+        <button onclick="selectPromotion(1)">
+            <img src="/images/Chess Images/WhiteRook.svg" alt="Rook" />
+        </button>
+        <button onclick="selectPromotion(3)">
+            <img src="/images/Chess Images/WhiteBishop.svg" alt="Bishop" />
+        </button>
+        <button onclick="selectPromotion(2)">
+            <img src="/images/Chess Images/WhiteKnight.svg" alt="Knight" />
+        </button>
+    </div>
+</div>
+
 @section Scripts {
     <script src="~/js/signalr/signalr.min.js"></script>
     <script src="~/js/ChessScripts/chessLogic.js"></script>
