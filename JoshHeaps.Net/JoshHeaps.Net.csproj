@@ -11,6 +11,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Resources/**"
+          CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Folder Include="Resources\" />
     <Folder Include="wwwroot\css\debug\" />
     <Folder Include="wwwroot\images\Chess Images\" />

@@ -4,6 +4,7 @@ using JoshHeaps.Net.Services.Interfaces;
 using Microsoft.AspNetCore.SignalR;
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Channels;
 
@@ -19,8 +20,23 @@ public sealed class Stockfish : IAsyncDisposable
     public Stockfish(int skill = 20, int hash = 256)
     {
         _skill = skill;
-        string relativeFilePath = @"\Resources\stockfish-windows-x86-64-avx2.exe";
-        string exePath = Assembly.GetExecutingAssembly().Location.Split(@"\bin\")[0] + relativeFilePath;
+        string exePath = string.Empty;
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            string relativeFilePath = @"\Resources\stockfish-windows-x86-64-avx2.exe";
+            exePath = Assembly.GetExecutingAssembly().Location.Split(@"\bin\")[0] + relativeFilePath;
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            string relativeFilePath = @"/Resources/stockfish-ubuntu-x86-64-sse41-popcnt";
+            exePath = Assembly.GetExecutingAssembly().Location.Split(@"/bin/")[0] + relativeFilePath;
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            string relativeFilePath = @"/Resources/stockfish-mac-x86-64-avx2";
+            exePath = Assembly.GetExecutingAssembly().Location.Split(@"/bin/")[0] + relativeFilePath;
+        }
 
         Console.Write(exePath);
 
@@ -36,7 +52,16 @@ public sealed class Stockfish : IAsyncDisposable
             }
         };
 
-        _p.Start();
+        try
+        {
+            _p.Start();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error starting process: {ex.Message}");
+            throw;
+        }
+
         _stdin = _p.StandardInput;
 
         _ = Task.Run(async () =>
