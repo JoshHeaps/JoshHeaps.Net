@@ -11,6 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Resources\" />
     <Folder Include="wwwroot\css\debug\" />
     <Folder Include="wwwroot\images\Chess Images\" />
     <Folder Include="wwwroot\images\Game Images\" />
