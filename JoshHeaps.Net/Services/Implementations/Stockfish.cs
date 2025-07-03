@@ -20,24 +20,21 @@ public sealed class Stockfish : IAsyncDisposable
     public Stockfish(int skill = 20, int hash = 256)
     {
         _skill = skill;
-        string exePath = string.Empty;
+        string baseDir = AppContext.BaseDirectory;                // always points to the folder that holds your DLL / EXE
+        string fileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                  ? "stockfish-windows-x86-64-avx2.exe"
+                  : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                    ? "stockfish-mac-x86-64-avx2"
+                    : "stockfish-ubuntu-x86-64-sse41-popcnt";   // default: Linux
 
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        string exePath = Path.Combine(baseDir, "Resources", fileName);
+        
+        if (!File.Exists(exePath))
         {
-            string relativeFilePath = @"\Resources\stockfish-windows-x86-64-avx2.exe";
-            exePath = Assembly.GetExecutingAssembly().Location.Split(@"\bin\")[0] + relativeFilePath;
+            throw new FileNotFoundException($"Stockfish executable not found at {exePath}. " +
+                "Ensure the file is present in the Resources folder of your project.");
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            string relativeFilePath = @"/Resources/stockfish-ubuntu-x86-64-sse41-popcnt";
-            exePath = Assembly.GetExecutingAssembly().Location.Split(@"/bin/")[0] + relativeFilePath;
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            string relativeFilePath = @"/Resources/stockfish-mac-x86-64-avx2";
-            exePath = Assembly.GetExecutingAssembly().Location.Split(@"/bin/")[0] + relativeFilePath;
-        }
-
+        
         Console.Write(exePath);
 
         _p = new Process

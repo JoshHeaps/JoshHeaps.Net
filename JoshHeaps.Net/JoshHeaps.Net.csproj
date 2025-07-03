@@ -11,8 +11,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Resources/**"
-          CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Resources/**">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
