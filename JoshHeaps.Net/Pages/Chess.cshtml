@@ -17,13 +17,13 @@
     </div>
 
     <div id="textContainer" class="sideContent">
-        <h1>Chess Arena</h1>
-        <p>This page will host your chess UI and interactions.</p>
+        <h1>Chess</h1>
+        <p>Click a button to start a game :)</p>
     </div>
 
     <div id="buttonContainer" class="sideContent">
         <button id="startGameBtn" onclick="startNewGame()">Start New Game</button>
-        <button id="startCPUGame" onclick="startCPUGame()">Start Game Against Computer</button>
+        <button id="startCPUGame" onclick="startCPUGame()">Vs CPU</button>
     </div>
 </div>
 
@@ -42,6 +42,18 @@
         <button onclick="selectPromotion(2)">
             <img src="/images/Chess Images/WhiteKnight.svg" alt="Knight" />
         </button>
+    </div>
+</div>
+
+<div id="difficultyModal" style="display: none;">
+    <p>Set bot difficulty to:</p>
+    <div id="difficultyButtonContainer">
+        @for (int i = 1; i <= 20; i++)
+        {
+            <button onclick="selectDifficulty(@i)">
+                @i
+            </button>
+        }
     </div>
 </div>
 

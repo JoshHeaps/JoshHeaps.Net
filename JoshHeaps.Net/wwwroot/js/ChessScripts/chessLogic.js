@@ -38,6 +38,38 @@ async function startNewGame() {
     renderPieces(data.pieces);
 }
 
+async function startCPUGame() {
+    if (signalRConnection) {
+        await signalRConnection.stop();
+        signalRConnection = null;
+    }
+
+    let difficulty = await promptDifficulty();
+
+    // Join the game via API
+    const response = await fetch(`/api/chess/new/${difficulty}`);
+    const gameData = await response.json();
+
+    currentGameId = gameData.gameId;
+    currentPlayerId = gameData.id;
+    currentPlayerIsWhite = gameData.isWhite;
+    previousMoveStart = null;
+    previousMoveEnd = null;
+    document.cookie = `chessGameId=${currentGameId}; path=/; max-age=86400`; // expires in 1 day
+    document.cookie = `chessPlayerId=${currentPlayerId}; path=/; max-age=86400`;
+    document.cookie = `chessPlayerIsWhite=${currentPlayerIsWhite}; path=/; max-age=86400`
+    console.log("🆕 Game started:", currentGameId);
+
+    // Build and start SignalR connection
+    await setupSignalRConnection();
+
+    // Render initial state
+    const gameState = await fetch(`/api/chess/${currentGameId}`);
+    const data = await gameState.json();
+
+    renderPieces(data.pieces);
+}
+
 function renderPieces(pieces) {
     // Clear all squares
     for (let i = 0; i < 64; i++) {
@@ -57,6 +89,28 @@ function renderPieces(pieces) {
         img.src = getPieceImageUrl(piece);
         img.alt = piece.type;
         img.classList.add("chessPiece");
+
+        img.draggable = true;
+        img.ondragstart = async (e) => {
+            selectedPiece = piece;
+            try {
+                const res = await fetch(`/api/chess/${currentGameId}/legalMoves/${piece.id}`);
+                if (!res.ok) throw new Error("API failed");
+                legalMoves = await res.json();
+                highlightSelected(piece.row, piece.col);
+                highlightLegalMoves(legalMoves);
+            }
+            catch (err) {
+                console.error(err);
+            }
+
+            e.dataTransfer.setData("text/plain", JSON.stringify({
+                srcRow: piece.Row,
+                srcCol: piece.Col
+            }))
+        }
+
+        img.ondragend = clearHighlights;
 
         img.onclick = (e) => {
             e.stopPropagation(); // 👈 Prevents the parent square click from firing
@@ -310,6 +364,16 @@ function promptPromotion() {
     });
 }
 
+function promptDifficulty() {
+    return new Promise(resolve => {
+        document.getElementById("difficultyModal").style.display = "block";
+        window.selectDifficulty = (difficulty) => {
+            document.getElementById("difficultyModal").style.display = "none";
+            resolve(difficulty);
+        };
+    });
+}
+
 function updatePromotionModalImages(color) {
     const pieceNames = ["Queen", "Rook", "Bishop", "Knight"];
     const buttons = document.querySelectorAll("#promotionModal button img");
@@ -345,5 +409,31 @@ window.addEventListener('load', async () => {
         } catch (err) {
             console.error("Failed to rejoin saved game:", err);
         }
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    // add near the bottom of chessLogic.js, run once after the DOM is ready
+    for (let i = 0; i < 64; i++) {
+        const square = document.getElementById(`square-${i}`);
+
+        // Allow dropping by cancelling the default
+        square.ondragover = (e) => {
+            e.preventDefault();
+        };
+
+        square.ondrop = (e) => {
+            e.preventDefault();
+
+            // If no piece is being dragged, ignore
+            if (!selectedPiece) return;
+
+            // Board-space index to (row,col)
+            const index = parseInt(square.id.split('-')[1], 10);
+            const targetRow = Math.floor(index / 8);
+            const targetCol = index % 8;
+
+            handleMove(targetRow, targetCol);
+        };
     }
 });

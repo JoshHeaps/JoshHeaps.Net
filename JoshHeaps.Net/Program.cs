@@ -26,6 +26,7 @@ public class Program
         builder.Services.AddSignalR();
 
         builder.Services.AddSingleton<IChessService, ChessService>();
+        builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
 
         var app = builder.Build();
 

@@ -14,6 +14,18 @@
     cursor: pointer;
     order: 1;
     padding: 2vh;
+    margin: 2vh;
+}
+
+#startCPUGame {
+    background-color: #8cd5ed;
+    color: #262626;
+    border-radius: 30px;
+    border: 0px;
+    cursor: pointer;
+    order: 1;
+    padding: 2vh;
+    margin: 2vh;
 }
 
 #chessContainer {
@@ -50,7 +62,8 @@
     flex-direction: column;
     order: -1;
     flex-shrink: 1;
-    font-size: large
+    font-size: large;
+    margin: 5vw;
 }
 
 #buttonContainer {
@@ -105,10 +118,20 @@
         font-size: large;
     }
 
+    #startCPUGame {
+        padding: 1vw;
+        margin: 1vw;
+        font-size: large;
+    }
+
     #chessBoard {
         aspect-ratio: 1 / 1;
         flex-shrink: 1;
         width: min(90vh, 90vw);
         max-height: 90vh;
+    }
+
+    #difficultyButtonContainer {
+        grid-template-columns: repeat(10, 1fr);
     }
 }

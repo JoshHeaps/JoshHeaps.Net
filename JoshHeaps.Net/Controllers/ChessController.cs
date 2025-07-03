@@ -1,16 +1,16 @@
-﻿using JoshHeaps.Net.Models;
+﻿using JoshHeaps.Net.Hubs;
+using JoshHeaps.Net.Models;
 using JoshHeaps.Net.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
 namespace JoshHeaps.Net.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ChessController : ControllerBase
+public class ChessController(IChessService chessService, IHubContext<ChessHub> chessHub, IBackgroundTaskQueue queue) : ControllerBase
 {
-    private readonly IChessService chessService;
-
     /// <summary>
     /// Store of ongoing games.
     /// </summary>
@@ -18,21 +18,50 @@ public class ChessController : ControllerBase
 
     private static ConcurrentDictionary<Guid, Task> _gameRemovalTasks = [];
 
-    public ChessController(IChessService chessService)
-    {
-        this.chessService = chessService;
-    }
-
     /// <summary>
     /// Create a new chess game and store it in-memory.
     /// </summary>
-    [HttpPost("new")]
-    public ActionResult CreateGame()
+    [HttpGet("new")]
+    [HttpGet("new/{difficulty}")]
+    public ActionResult CreateGame(int difficulty = 20)
     {
         var gameState = chessService.CreateNewGame();
         _games[gameState.GameId] = gameState;
 
-        return Ok(new { gameState.GameId });
+        gameState.IsVsComputer = true;
+        gameState.WhiteJoined = true;
+        gameState.BlackJoined = true;
+        Guid playerId = Guid.NewGuid();
+        Guid computerId = Guid.NewGuid();
+        var isWhite = Random.Shared.Next(2) == 0;
+
+        gameState.Computer = new(difficulty);
+
+        if (isWhite)
+        {
+            gameState.WhitePlayerId = playerId;
+            gameState.BlackPlayerId = computerId;
+        }
+        else
+        {
+            gameState.WhitePlayerId = computerId;
+            gameState.BlackPlayerId = playerId;
+            queue.Queue(async () =>
+            {
+                // Give user's browser time to connect to signalR and such.
+                await Task.Delay(TimeSpan.FromSeconds(1));
+                await gameState.Computer.MakeMove(gameState, chessHub, chessService);
+            });
+        }
+
+        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromHours(1));
+
+        return Ok(new
+        {
+            Id = playerId,
+            IsWhite = isWhite,
+            gameState.GameId
+        });
     }
 
     /// <summary>
@@ -153,8 +182,14 @@ public class ChessController : ControllerBase
         else
         {
             // increase timeout if play continues.
-            ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
+            if (gameState.IsVsComputer)
+                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromHours(1));
+            else
+                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
         }
+
+        if (gameState.IsVsComputer && gameState.Computer is not null)
+            queue.Queue(() => gameState.Computer.MakeMove(gameState, chessHub, chessService));
 
         return Ok(result);
     }
@@ -199,6 +234,10 @@ public class ChessController : ControllerBase
             _gameRemovalTasks[id] = Task.Run(async () =>
             {
                 await Task.Delay(delay);
+
+                if (_games[id].Computer is not null)
+                    await _games[id].Computer!.DisposeAsync();
+
                 _games.Remove(id, out _);
                 _gameRemovalTasks.Remove(id, out _);
             });
@@ -209,6 +248,10 @@ public class ChessController : ControllerBase
         _gameRemovalTasks.TryAdd(id, Task.Run(async () =>
         {
             await Task.Delay(delay);
+
+            if (_games[id].Computer is not null)
+                await _games[id].Computer!.DisposeAsync();
+
             _games.Remove(id, out _);
             _gameRemovalTasks.Remove(id, out _);
         }));

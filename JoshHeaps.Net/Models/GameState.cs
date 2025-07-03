@@ -1,4 +1,6 @@
-﻿namespace JoshHeaps.Net.Models;
+﻿using JoshHeaps.Net.Services.Implementations;
+
+namespace JoshHeaps.Net.Models;
 
 public class GameState
 {
@@ -38,6 +40,10 @@ public class GameState
     public bool BlackJoined { get; set; } = false;
     public Guid WhitePlayerId { get; set; }
     public Guid BlackPlayerId { get; set; }
+
+    public bool IsVsComputer { get; set; } = false;
+
+    public Stockfish? Computer { get; set; }
 
     // optional: convenience
     public bool IsOpen => !WhiteJoined || !BlackJoined;
