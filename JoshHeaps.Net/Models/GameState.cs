@@ -1,4 +1,8 @@
 ﻿using JoshHeaps.Net.Services.Implementations;
+using JoshHeaps.Net.Utilities;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace JoshHeaps.Net.Models;
 
@@ -8,6 +12,7 @@ public class GameState
 
     // 8x8 board of references. Null if no piece is present.
     // row 0 at top -> row 7 at bottom (typical 0-based array).
+    [JsonConverter(typeof(ChessBoardConverter))]
     public ChessPiece?[,] Board { get; set; }
 
     // Whose turn is it?
@@ -42,7 +47,10 @@ public class GameState
     public Guid BlackPlayerId { get; set; }
 
     public bool IsVsComputer { get; set; } = false;
+    public int ComputerDifficulty { get; set; } = 20;
 
+    [JsonIgnore]          // <-- exclude from JSON
+    [NotMapped]           // <-- EF won't try to persist it either
     public Stockfish? Computer { get; set; }
 
     // optional: convenience

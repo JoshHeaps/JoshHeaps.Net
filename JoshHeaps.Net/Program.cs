@@ -1,6 +1,8 @@
+using JoshHeaps.Net.DAL;
 using JoshHeaps.Net.Hubs;
 using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Services.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace JoshHeaps.Net;
 
@@ -27,8 +29,16 @@ public class Program
 
         builder.Services.AddSingleton<IChessService, ChessService>();
         builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+        var cs = builder.Configuration.GetConnectionString("ChessDatabase");
+        builder.Services.AddDbContext<ChessDbContext>(o => o.UseSqlite(cs));
 
         var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<ChessDbContext>();
+            dbContext.Database.Migrate();
+        }
 
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
