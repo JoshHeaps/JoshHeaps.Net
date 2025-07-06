@@ -47,11 +47,8 @@ public class GameState
     public Guid BlackPlayerId { get; set; }
 
     public bool IsVsComputer { get; set; } = false;
+    public PieceColor ComputerColor { get; set; } = PieceColor.Black; // default to black for computer
     public int ComputerDifficulty { get; set; } = 20;
-
-    [JsonIgnore]          // <-- exclude from JSON
-    [NotMapped]           // <-- EF won't try to persist it either
-    public Stockfish? Computer { get; set; }
 
     // optional: convenience
     public bool IsOpen => !WhiteJoined || !BlackJoined;

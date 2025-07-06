@@ -1,7 +1,9 @@
-﻿using JoshHeaps.Net.Hubs;
+﻿using JoshHeaps.Net.DAL;
+using JoshHeaps.Net.Hubs;
 using JoshHeaps.Net.Models;
 using JoshHeaps.Net.Services.Interfaces;
 using JoshHeaps.Net.Utilities;
+using Microsoft.AspNetCore.Rewrite;
 using Microsoft.AspNetCore.SignalR;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -15,6 +17,12 @@ public sealed class Stockfish : IAsyncDisposable
     private readonly StreamWriter _stdin;
     private readonly Channel<string> _stdout = Channel.CreateUnbounded<string>();
     private readonly int _skill;
+
+    private static readonly SemaphoreSlim _mutex = new(1, 1);
+    private static readonly List<Guid> _statesRunning = [];
+
+    public bool IsRunning => _p is not null && !_p.HasExited;
+    public bool InUse { get; set; }
 
     public Stockfish(int skill = 20, int hash = 256)
     {
@@ -44,7 +52,7 @@ public sealed class Stockfish : IAsyncDisposable
                 RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
             }
         };
 
@@ -70,7 +78,6 @@ public sealed class Stockfish : IAsyncDisposable
         Send("uci");
         WaitFor("uciok").GetAwaiter().GetResult();
 
-        Send($"setoption name Skill Level value {skill}");
         Send($"setoption name Hash value {hash}");
         Send("isready");
         WaitFor("readyok").GetAwaiter().GetResult();
@@ -109,8 +116,15 @@ public sealed class Stockfish : IAsyncDisposable
         _p.Dispose();
     }
 
-    public async Task MakeMove(GameState state, IHubContext<ChessHub> chessHub, IChessService chessService)
+    public async Task<bool> MakeMove(GameState state, IHubContext<ChessHub> chessHub, IChessService chessService, ChessDbAccess dbAccess)
     {
+        if (state.ComputerColor != state.CurrentPlayer)
+            return false;
+
+        Send($"setoption name Skill Level value {state.ComputerDifficulty}");
+        Send("isready");
+        await WaitFor("readyok");
+
         var move = await GetBestMoveAsync(state.ToFen());
 
         var moveDto = move.ToMoveDto(
@@ -119,8 +133,10 @@ public sealed class Stockfish : IAsyncDisposable
                 ? state.WhitePlayerId
                 : state.BlackPlayerId);
 
-        var result = chessService.MakeMove(state, moveDto);
+        var result = await chessService.MakeMove(state, moveDto);
 
         await chessHub.Clients.Group(state.GameId.ToString()).SendAsync("ReceiveMoveUpdate", state.GameId.ToString(), moveDto, result);
+
+        return true;
     }
 }
