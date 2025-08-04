@@ -9,10 +9,7 @@ namespace JoshHeaps.Net.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ChessController(
-    IChessService chessService,
-    IHubContext<ChessHub> chessHub,
-    IBackgroundTaskQueue queue) : ControllerBase
+public class ChessController(IChessService chessService, IHubContext<ChessHub> chessHub, IBackgroundTaskQueue queue) : ControllerBase
 {
     /// <summary>
     /// Store of ongoing games.
@@ -34,7 +31,6 @@ public class ChessController(
         gameState.IsVsComputer = true;
         gameState.WhiteJoined = true;
         gameState.BlackJoined = true;
-        gameState.ComputerDifficulty = difficulty;
         Guid playerId = Guid.NewGuid();
         Guid computerId = Guid.NewGuid();
         var isWhite = Random.Shared.Next(2) == 0;
