@@ -2,5 +2,5 @@
 
 public interface IBackgroundTaskQueue
 {
-    void Queue(Func<Task> workItem, Guid workId);
+    void Queue(Func<Task> workItem);
 }

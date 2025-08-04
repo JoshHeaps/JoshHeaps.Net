@@ -1,8 +1,6 @@
-﻿using JoshHeaps.Net.DAL;
-using JoshHeaps.Net.Models;
+﻿using JoshHeaps.Net.Models;
 using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Utilities;
-using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
 namespace JoshHeaps.Net.Tests.JsonTests;
@@ -13,7 +11,7 @@ internal class JsonConversionTests
     public void ConvertBoard_WhenGivenStartingBoard_CanConvertToAndFromJson()
     {
         // Arrange
-        var gameState = new ChessService(null).CreateNewGame();
+        var gameState = new ChessService().CreateNewGame();
 
         // Act
         var serializedGameState = JsonSerializer.Serialize(gameState);

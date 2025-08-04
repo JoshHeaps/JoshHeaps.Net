@@ -1,9 +1,6 @@
-﻿using JoshHeaps.Net.DAL;
-using JoshHeaps.Net.Hubs;
+﻿using JoshHeaps.Net.Hubs;
 using JoshHeaps.Net.Models;
-using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Services.Interfaces;
-using JoshHeaps.Net.Utilities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
@@ -15,9 +12,7 @@ namespace JoshHeaps.Net.Controllers;
 public class ChessController(
     IChessService chessService,
     IHubContext<ChessHub> chessHub,
-    BackgroundTaskQueue queue,
-    ChessDbAccess dbAccess,
-    StockfishManager stockfishManager) : ControllerBase
+    IBackgroundTaskQueue queue) : ControllerBase
 {
     /// <summary>
     /// Store of ongoing games.
@@ -26,21 +21,13 @@ public class ChessController(
 
     private static ConcurrentDictionary<Guid, Task> _gameRemovalTasks = [];
 
-    private static ConcurrentDictionary<Guid, DateTimeOffset> _lastUpdated = [];
-
-    private static ConcurrentDictionary<Guid, GameState> _deliquents = [];
-
-    private static readonly Guid SystemId = Guid.NewGuid();
-
     /// <summary>
     /// Create a new chess game and store it in-memory.
     /// </summary>
     [HttpGet("new")]
     [HttpGet("new/{difficulty}")]
-    public async Task<ActionResult> CreateGame(int difficulty = 20)
+    public ActionResult CreateGame(int difficulty = 20)
     {
-        await CheckForGameState();
-
         var gameState = chessService.CreateNewGame();
         _games[gameState.GameId] = gameState;
 
@@ -50,29 +37,28 @@ public class ChessController(
         gameState.ComputerDifficulty = difficulty;
         Guid playerId = Guid.NewGuid();
         Guid computerId = Guid.NewGuid();
-        var isWhite = false;
+        var isWhite = Random.Shared.Next(2) == 0;
+
+        gameState.Computer = new(difficulty);
 
         if (isWhite)
         {
             gameState.WhitePlayerId = playerId;
             gameState.BlackPlayerId = computerId;
-            gameState.ComputerColor = PieceColor.Black;
         }
         else
         {
             gameState.WhitePlayerId = computerId;
             gameState.BlackPlayerId = playerId;
-            gameState.ComputerColor = PieceColor.White;
-
-            queue.Queue(async() =>
+            queue.Queue(async () =>
             {
+                // Give user's browser time to connect to signalR and such.
                 await Task.Delay(TimeSpan.FromSeconds(1));
-                if (!await stockfishManager.Run(gameState))
-                    _deliquents[gameState.GameId] = gameState;
-            }, gameState.GameId);
+                await gameState.Computer.MakeMove(gameState, chessHub, chessService);
+            });
         }
 
-        await dbAccess.SaveAsync(gameState);
+        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromHours(1));
 
         return Ok(new
         {
@@ -88,10 +74,8 @@ public class ChessController(
     /// and a bool indicating if they are White.
     /// </summary>
     [HttpGet("JoinGame")]
-    public async Task<ActionResult> JoinGame()
+    public ActionResult JoinGame()
     {
-        await CheckForGameState();
-
         Console.WriteLine("joining game");
         GameState? gameState = _games.Values.FirstOrDefault(g => g.IsOpen);
 
@@ -116,8 +100,7 @@ public class ChessController(
             isWhite = false;
         }
 
-        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(10));
-        await dbAccess.SaveAsync(gameState);
+        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
 
         return Ok(new
         {
@@ -131,11 +114,9 @@ public class ChessController(
     /// Get the state of an existing game by ID.
     /// </summary>
     [HttpGet("{gameId}")]
-    public async Task<ActionResult> GetGameState(Guid gameId)
+    public ActionResult GetGameState(Guid gameId)
     {
-        var gameState = await CheckForGameState(gameId);
-
-        if (gameState is null)
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         var response = new
@@ -171,11 +152,9 @@ public class ChessController(
     /// The test passes a JSON body with a MoveDto.
     /// </summary>
     [HttpPost("move")]
-    public async Task<ActionResult> MakeMove([FromBody] MoveDto moveDto)
+    public ActionResult MakeMove([FromBody] MoveDto moveDto)
     {
-        var gameState = await CheckForGameState(moveDto.GameId);
-
-        if (gameState is null)
+        if (!_games.TryGetValue(moveDto.GameId, out var gameState))
             return NotFound("Game not found");
 
         // Check if player is authorized to move
@@ -194,31 +173,27 @@ public class ChessController(
         if ((isWhiteMove && piece.Color != PieceColor.White) || (!isWhiteMove && piece?.Color != PieceColor.Black))
             return Forbid("You cannot move this piece.");
 
-        var result = await chessService.MakeMove(gameState, moveDto);
+        var result = chessService.MakeMove(gameState, moveDto);
 
         if (!result.Success)
             return BadRequest(result);
 
-        queue.Queue(async () =>
-        {
-            if (!await stockfishManager.Run(gameState))
-                _deliquents[gameState.GameId] = gameState;
-        }, gameState.GameId);
-        
-
         if (result.IsCheckmate || result.IsStalemate)
         {
             // queue game removal
-            ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(10));
+            ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(1));
         }
         else
         {
             // increase timeout if play continues.
             if (gameState.IsVsComputer)
-                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(10));
+                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromHours(1));
             else
-                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(10));
+                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
         }
+
+        if (gameState.IsVsComputer && gameState.Computer is not null)
+            queue.Queue(() => gameState.Computer.MakeMove(gameState, chessHub, chessService));
 
         return Ok(result);
     }
@@ -227,15 +202,12 @@ public class ChessController(
     /// Get the legal moves for a specific piece in a specific game.
     /// </summary>
     [HttpGet("{gameId}/legalMoves/{pieceId}")]
-    public async Task<ActionResult> GetLegalMoves(Guid gameId, string pieceId)
+    public ActionResult GetLegalMoves(Guid gameId, string pieceId)
     {
-        var gameState = await CheckForGameState(gameId);
-
-        if (gameState is null)
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         var moves = chessService.GetLegalMovesForPiece(gameState, pieceId);
-
         return Ok(moves);
     }
 
@@ -244,11 +216,9 @@ public class ChessController(
     /// This was in your snippet, so we'll keep it.
     /// </summary>
     [HttpGet("{gameId}/legalMoves")]
-    public async Task<ActionResult> GetAllLegalMoves(Guid gameId)
+    public ActionResult GetAllLegalMoves(Guid gameId)
     {
-        var gameState = await CheckForGameState(gameId);
-
-        if (gameState is null)
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         var allMoves = chessService.GetAllLegalMoves(gameState)
@@ -258,53 +228,36 @@ public class ChessController(
                 Moves = x.moves
             });
 
-        await stockfishManager.Run(gameState);
-
         return Ok(allMoves);
     }
 
-    private void ScheduleRemoveGame(Guid id, TimeSpan delay)
+    private static void ScheduleRemoveGame(Guid id, TimeSpan delay)
     {
         if (_gameRemovalTasks.ContainsKey(id))
         {
-            _lastUpdated[id] = DateTimeOffset.UtcNow;
+            _gameRemovalTasks[id] = Task.Run(async () =>
+            {
+                await Task.Delay(delay);
+
+                if (_games[id].Computer is not null)
+                    await _games[id].Computer!.DisposeAsync();
+
+                _games.Remove(id, out _);
+                _gameRemovalTasks.Remove(id, out _);
+            });
 
             return;
         }
 
         _gameRemovalTasks.TryAdd(id, Task.Run(async () =>
         {
-            _lastUpdated[id] = DateTimeOffset.UtcNow;
+            await Task.Delay(delay);
 
-            while (_lastUpdated[id].Add(delay) >= DateTimeOffset.UtcNow)
-                await Task.Delay(TimeSpan.FromMinutes(10));
+            if (_games[id].Computer is not null)
+                await _games[id].Computer!.DisposeAsync();
 
-            await GuidStore.RemoveAsync(id);
             _games.Remove(id, out _);
             _gameRemovalTasks.Remove(id, out _);
         }));
-    }
-
-    private async Task<GameState?> CheckForGameState(Guid gameId = default)
-    {
-        if (!_deliquents.IsEmpty)
-            queue.Queue(() => stockfishManager.RunDeliquents(_deliquents), SystemId);
-
-        if (_games.TryGetValue(gameId, out var existingGame))
-            return existingGame;
-
-        var gameState = await dbAccess.LoadAsync(gameId);
-
-        if (gameState is not null)
-        {
-            _games.TryAdd(gameState.GameId, gameState);
-            
-            if (gameState.ComputerColor == gameState.CurrentPlayer)
-                _deliquents.TryAdd(gameState.GameId, gameState);
-        }
-
-        queue.Queue(() => stockfishManager.RunDeliquents(_deliquents), SystemId);
-
-        return gameState;
     }
 }

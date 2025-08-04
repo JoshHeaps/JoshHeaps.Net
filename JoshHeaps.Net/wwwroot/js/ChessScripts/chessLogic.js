@@ -105,8 +105,8 @@ function renderPieces(pieces) {
             }
 
             e.dataTransfer.setData("text/plain", JSON.stringify({
-                srcRow: piece.row,
-                srcCol: piece.col
+                srcRow: piece.Row,
+                srcCol: piece.Col
             }))
         }
 
@@ -319,7 +319,7 @@ function getCookie(name) {
 async function setupSignalRConnection() {
     signalRConnection = new signalR.HubConnectionBuilder()
         .withUrl("/chessHub")
-        .configureLogging(signalR.LogLevel.Trace)
+        .configureLogging(signalR.LogLevel.Information)
         .build();
 
     signalRConnection.onclose(err => {
@@ -386,7 +386,7 @@ function updatePromotionModalImages(color) {
 console.log("chessLogic.js loaded");
 window.startNewGame = startNewGame;
 
-document.addEventListener('DOMContentLoaded', async () => {
+window.addEventListener('load', async () => {
     const savedGameId = getCookie("chessGameId");
     const savedPlayerId = getCookie("chessPlayerId");
     const savedPlayerIsWhite = getCookie("chessPlayerIsWhite");

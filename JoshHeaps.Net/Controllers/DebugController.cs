@@ -1,5 +1,4 @@
-﻿using JoshHeaps.Net.Services.Implementations;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 
 namespace JoshHeaps.Net.Controllers;
 
@@ -10,9 +9,6 @@ public class DebugController : ControllerBase
     [HttpGet("IpCheck")]
     public ActionResult<string> GetIpCheckingStatus()
     {
-        if (AutoIpUpdateService.IsEnabled)
-            return Ok("true");
-
-        return Ok("false");
+        return Ok(Program.CheckingForIpUpdates.ToString());
     }
 }

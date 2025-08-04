@@ -4,21 +4,18 @@ using System.Threading.Channels;
 
 namespace JoshHeaps.Net.Services.Implementations;
 
-public class BackgroundTaskQueue
+public class BackgroundTaskQueue : IBackgroundTaskQueue
 {
-    private readonly ConcurrentDictionary<Guid, Task> _runningTasks = new();
+    private readonly ConcurrentDictionary<int, Task> _runningTasks = new();
 
-    public void Queue(Func<Task> workItem, Guid workId)
+    public void Queue(Func<Task> workItem)
     {
-        if (_runningTasks.ContainsKey(workId))
-            return;
-
         var task = Task.Run(workItem);
-        _runningTasks.TryAdd(workId, task);
+        _runningTasks.TryAdd(task.Id, task);
 
-        task.ContinueWith(t => _runningTasks.TryRemove(workId, out _), TaskScheduler.Default);
+        task.ContinueWith(t => _runningTasks.TryRemove(t.Id, out _), TaskScheduler.Default);
     }
 
-    public IReadOnlyDictionary<Guid, Task> Running => _runningTasks;
-    public Task WhenAllDone() => Task.WhenAll(Running.Values);
+    public IReadOnlyCollection<Task> Running => [.. _runningTasks.Values];
+    public Task WhenAllDone() => Task.WhenAll(Running);
 }

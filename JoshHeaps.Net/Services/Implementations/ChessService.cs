@@ -1,10 +1,9 @@
-﻿using JoshHeaps.Net.DAL;
-using JoshHeaps.Net.Models;
+﻿using JoshHeaps.Net.Models;
 using JoshHeaps.Net.Services.Interfaces;
 
 namespace JoshHeaps.Net.Services.Implementations;
 
-public class ChessService(ChessDbAccess dbAccess) : IChessService
+public class ChessService : IChessService
 {
     public GameState CreateNewGame()
     {
@@ -123,7 +122,7 @@ public class ChessService(ChessDbAccess dbAccess) : IChessService
         return legalMoves;
     }
 
-    public async Task<MoveResultDto> MakeMove(GameState gameState, MoveDto moveDto)
+    public MoveResultDto MakeMove(GameState gameState, MoveDto moveDto)
     {
         var piece = gameState.Pieces.FirstOrDefault(p => p.Id == moveDto.PieceId);
 
@@ -146,12 +145,6 @@ public class ChessService(ChessDbAccess dbAccess) : IChessService
         var notation = $"{piece.Id}:{piece.Position}->{targetPos}";
         gameState.MoveHistory.Add(notation);
 
-        gameState.CurrentPlayer = gameState.CurrentPlayer == PieceColor.White
-            ? PieceColor.Black
-            : PieceColor.White;
-
-        await dbAccess.SaveAsync(gameState);
-
         return new MoveResultDto
         {
             Success = true,
@@ -173,8 +166,8 @@ public class ChessService(ChessDbAccess dbAccess) : IChessService
         piece.Position = targetPos;
         gs.Board[targetPos.Row, targetPos.Col] = piece;
 
-        if (captured is not null && captured != piece)
-            captured.Position = new Position(-1, -1); // Remove captured piece from board
+        if (captured != null && captured != piece)
+            captured.Position = new Position(-1, -1);
 
         bool wasFirstMove = !piece.HasMoved;
         piece.HasMoved = true;
@@ -186,6 +179,10 @@ public class ChessService(ChessDbAccess dbAccess) : IChessService
         HandlePawnPromotionIfNeeded(piece, moveDto);
 
         UpdateCastlingRights(gs, piece, oldPos);
+
+        gs.CurrentPlayer = gs.CurrentPlayer == PieceColor.White
+            ? PieceColor.Black
+            : PieceColor.White;
     }
 
     private static void HandleEnPassantIfNeeded(GameState gs, ChessPiece piece, Position targetPos, ref ChessPiece? captured)
