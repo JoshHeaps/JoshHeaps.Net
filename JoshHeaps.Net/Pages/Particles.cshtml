@@ -1,0 +1,110 @@
+﻿@page
+@model JoshHeaps.Net.Pages.ParticlesModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Particle Simulator";
+}
+
+<section class="container">
+    <header class="toolbar">
+        <button id="toggleToolbar" title="Collapse/expand toolbar">☰</button>
+        <div class="group">
+            <label for="seed">Seed</label>
+            <input id="seed" type="number" value="@Model.Seed" />
+            <button id="randomSeed" title="Random seed">🎲</button>
+        </div>
+        <div class="group">
+            <label for="count">Particles</label>
+            <input id="count" type="number" min="50" max="5000" value="@Model.N" />
+        </div>
+        <div class="group">
+            <label for="speed">Speed</label>
+            <input id="speed" type="range" min="0.1" max="5" step="0.1" value="@Model.Speed" />
+            <output id="speedOut">@Model.Speed</output>
+        </div>
+        <div class="spacer"></div>
+        <button id="restart">Restart</button>
+        <button id="permalink" title="Copy link with current settings">Permalink</button>
+    </header>
+
+    <details class="rulepanel">
+        <summary>Edit interaction rules</summary>
+        <div class="rules-body">
+            <div class="group">
+                <label for="ruleActiveColor">Active color</label>
+                <select id="ruleActiveColor">
+                    <option value="0">Red (R)</option>
+                    <option value="1">Green (G)</option>
+                    <option value="2">Blue (B)</option>
+                    <option value="3">Yellow (Y)</option>
+                    <option value="4">Cyan (C)</option>
+                    <option value="5">Magenta (M)</option>
+                </select>
+            </div>
+
+            <div class="rule-grid">
+                <label class="rule-item">
+                    <span class="swatch" style="--c:#ff0000"></span>to Red (R)
+                    <input id="rule_R" type="range" min="-1" max="1" step="0.01" />
+                    <output id="rule_R_out"></output>
+                </label>
+                <label class="rule-item">
+                    <span class="swatch" style="--c:#00ff00"></span>to Green (G)
+                    <input id="rule_G" type="range" min="-1" max="1" step="0.01" />
+                    <output id="rule_G_out"></output>
+                </label>
+                <label class="rule-item">
+                    <span class="swatch" style="--c:#0066ff"></span>to Blue (B)
+                    <input id="rule_B" type="range" min="-1" max="1" step="0.01" />
+                    <output id="rule_B_out"></output>
+                </label>
+                <label class="rule-item">
+                    <span class="swatch" style="--c:#00ffff"></span>to Cyan (C)
+                    <input id="rule_C" type="range" min="-1" max="1" step="0.01" />
+                    <output id="rule_C_out"></output>
+                </label>
+                <label class="rule-item">
+                    <span class="swatch" style="--c:#ffff00"></span>to Yellow (Y)
+                    <input id="rule_Y" type="range" min="-1" max="1" step="0.01" />
+                    <output id="rule_Y_out"></output>
+                </label>
+                <label class="rule-item">
+                    <span class="swatch" style="--c:#ff00ff"></span>to Magenta (M)
+                    <input id="rule_M" type="range" min="-1" max="1" step="0.01" />
+                    <output id="rule_M_out"></output>
+                </label>
+            </div>
+
+            <div class="rule-actions">
+                <button id="copyRules" title="Copy current 6x6 matrix as JSON">Copy Rules</button>
+                <button id="toggleImport">Import Rules</button>
+            </div>
+            <div id="importArea" class="rule-import" hidden>
+                <textarea id="rulesJson" rows="4" placeholder='Paste JSON like [[..6..],[..],...]'></textarea>
+                <div class="rule-actions">
+                    <button id="applyRules">Apply</button>
+                    <button id="cancelImport">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </details>
+
+    <canvas id="sim" class="sim" aria-label="Particle simulator"></canvas>
+</section>
+
+<script>
+    // Boot config is defined before the main script loads.
+    window.__PARTICLE_BOOT__ = {
+      seed: @Model.Seed,
+      n: @Model.N,
+      speed: @Model.Speed
+    };
+</script>
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/particles/page.css?v=@ViewData["cssVersion"]" />
+}
+
+@section Scripts {
+    <script defer src="~/js/particles/page.bundle.js"></script>
+}

@@ -1,0 +1,400 @@
+﻿/* ------- page background + overlays ------- */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: #000;
+    color: #e6e6e6;
+    font-family: ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    overflow: hidden;
+}
+
+/* canvas as full-screen background */
+.sim {
+    position: fixed;
+    inset: 0; /* top:0 right:0 bottom:0 left:0 */
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    z-index: 0;
+}
+
+/* floating toolbar */
+.toolbar {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    z-index: 20;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    padding: .6rem .75rem;
+    background: rgba(15,15,15,.65);
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+}
+
+/* collapse/expand toolbar */
+.toolbar .spacer {
+    flex: 1 1 auto;
+}
+
+#toggleToolbar {
+    padding: .35rem .5rem;
+    border-radius: .4rem;
+}
+
+.toolbar.collapsed {
+    padding: .35rem .5rem;
+    gap: .5rem;
+}
+
+.toolbar.collapsed .group,
+.toolbar.collapsed #restart,
+.toolbar.collapsed #permalink,
+.toolbar.collapsed .spacer {
+    display: none;
+}
+
+/* floating rules panel (details) */
+.rulepanel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 20;
+    background: rgba(11,11,11,.65);
+    border: 1px solid #1a1a1a;
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    overflow: hidden; /* collapsed state shows only summary */
+    max-height: 42vh; /* when open, content scrolls inside */
+}
+
+.rulepanel[open] {
+    overflow: auto;
+}
+
+.rulepanel > summary {
+    cursor: pointer;
+    font-weight: 600;
+    list-style: none;
+    user-select: none;
+    padding: .6rem .75rem;
+    margin: 0;
+    position: sticky;
+    top: 0;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.rulepanel > summary::-webkit-details-marker {
+    display: none;
+}
+
+.rulepanel > summary::after {
+    content: "▾";
+    margin-left: auto;
+    opacity: .8;
+}
+
+.rulepanel:not([open]) > summary::after {
+    content: "▸";
+}
+
+.rules-body {
+    padding: .75rem 1rem 1rem;
+    display: grid;
+    gap: .75rem;
+}
+
+.rule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+    gap: .5rem 1rem;
+}
+
+.rule-item {
+    align-items: center;
+    gap: .5rem;
+}
+
+/* buttons + inputs (keep your existing styles, just a few tweaks) */
+button {
+    background: #1f1f1f;
+    border: 1px solid #2a2a2a;
+    color: #e6e6e6;
+    padding: .4rem .7rem;
+    border-radius: .5rem;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #2a2a2a;
+}
+
+/* range styling (from your sheet; leave as-is) */
+:root {
+    --slider-track: #444;
+    --slider-fill: #4cafef;
+    --slider-thumb: #ff5722;
+}
+
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    width: 100%;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px;
+    background: var(--slider-track);
+    border-radius: 3px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #222;
+    margin-top: -6px;
+    cursor: pointer;
+    background: var(--slider-thumb);
+}
+
+input[type="range"]::-moz-range-track {
+    height: 6px;
+    background: var(--slider-track);
+    border-radius: 3px;
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #222;
+    cursor: pointer;
+    background: var(--thumb-color, var(--slider-thumb));
+}
+
+input[type="range"]::-moz-range-progress {
+    background: var(--slider-fill);
+    height: 6px;
+    border-radius: 3px;
+}
+
+/* container no longer controls layout; keep for semantics */
+.container {
+    position: relative;
+    height: 100vh;
+}
+
+/* Canvas already full screen; nothing to change there */
+
+/* --- Toolbar square when collapsed --- */
+.toolbar {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    z-index: 20;
+    background: rgba(15,15,15,.65);
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+}
+
+.toolbar.collapsed {
+    left: 12px;
+    right: auto; /* stop spanning full width */
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    display: grid;
+    place-items: center;
+}
+
+.toolbar.collapsed .group,
+.toolbar.collapsed #restart,
+.toolbar.collapsed #permalink,
+.toolbar.collapsed .spacer {
+    display: none;
+}
+
+.toolbar.collapsed #toggleToolbar {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border-radius: 8px;
+    font-size: 0; /* hide the word "Toolbar" */
+}
+
+.toolbar.collapsed #toggleToolbar::before {
+    content: "☰"; /* icon only */
+    font-size: 18px;
+}
+
+/* --- Rules panel as a floating card; tiny square when closed --- */
+.rulepanel {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 20;
+    background: rgba(11,11,11,.65);
+    border: 1px solid #1a1a1a;
+    border-radius: 10px;
+    backdrop-filter: blur(6px);
+    max-height: 42vh;
+    overflow: auto;
+}
+
+.rulepanel[open] {
+    max-height: calc(100dvh - 24px - 60px);
+    overflow: auto;
+    scrollbar-gutter: stable both-edges; /* avoids layout jump */
+    overscroll-behavior: contain;
+}
+
+.rulepanel[open] {
+    scrollbar-width: none;
+}
+/* Firefox */
+.rulepanel[open]::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+/* WebKit */
+
+.rulepanel > summary {
+    position: sticky;
+    top: 0;
+    padding: .6rem .75rem;
+    margin: 0;
+    cursor: pointer;
+    font-weight: 600;
+    border-bottom: 1px solid #1a1a1a;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.rulepanel > summary::-webkit-details-marker {
+    display: none;
+}
+
+.rulepanel[open] > summary::after {
+    content: "▾";
+    margin-left: auto;
+    opacity: .8;
+}
+
+/* closed => tiny square pinned bottom-right */
+.rulepanel:not([open]) {
+    left: 12px;
+    right: auto; /* stop spanning full width */
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    gap: 0;
+    display: grid;
+    place-items: center;
+}
+
+.rulepanel:not([open]) > summary {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-items: center;
+    font-size: 0; /* hide label text */
+}
+
+.rulepanel:not([open]) > summary::after {
+    content: "";
+}
+/* no caret */
+.rulepanel:not([open]) > summary::before {
+    content: "Rules"; /* icon only */
+    font-size: 18px;
+}
+
+/* Keep sliders/layout rules you already have */
+
+@media (max-width: 640px) {
+    /* Default to FAB */
+    .toolbar {
+        top: 12px;
+        left: 12px;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        gap: 0;
+        display: grid;
+        place-items: center;
+    }
+
+    .toolbar .group, .toolbar #restart, .toolbar #permalink, .toolbar .spacer {
+        display: none;
+    }
+
+    /* FAB button icon */
+    #toggleToolbar {
+        width: 100%;
+        height: 44px;
+        padding: 0;
+        border-radius: 8px;
+        font-size: 18px;
+    }
+
+    #toggleToolbar::before {
+        width: 44px;
+        font-size: 18px;
+    }
+
+    /* Expanded drawer */
+    .toolbar.mobile.open {
+        left: 12px;
+        width: min(85vw, 420px);
+        height: 70vh; /* scroll within drawer if needed */
+        padding: .6rem .75rem;
+        display: flex;
+        flex-direction: column;
+        gap: .65rem;
+        overflow: auto;
+    }
+
+    .toolbar.mobile.open .group,
+    .toolbar.mobile.open #restart,
+    .toolbar.mobile.open #permalink {
+        display: inline-flex;
+    }
+
+    .toolbar.mobile.open .group {
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+
+    .toolbar.mobile.open input[type="number"],
+    .toolbar.mobile.open input[type="range"] {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .toolbar.mobile.open label {
+        white-space: nowrap;
+    }
+}
