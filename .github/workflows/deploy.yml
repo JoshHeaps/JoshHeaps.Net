@@ -1,0 +1,64 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ "master" ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'  # adjust if needed
+      - name: Restore
+        run: dotnet restore
+      - name: Publish
+        run: dotnet publish -c Release -o ./publish
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-publish
+          path: ./publish
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site-publish
+          path: publish
+
+      - name: Prepare SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${{ secrets.SSH_PORT || 22 }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Rsync to server
+        run: |
+          rsync -az --delete -e "ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_rsa" \
+            publish/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/
+
+      - name: Reload and restart service
+        run: |
+          ssh -i ~/.ssh/id_rsa -p "${{ secrets.SSH_PORT || 22 }}" \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "sudo systemctl daemon-reload && sudo systemctl restart ${{ secrets.SERVICE_NAME }} && systemctl --no-pager status ${{ secrets.SERVICE_NAME }} --lines=0"
