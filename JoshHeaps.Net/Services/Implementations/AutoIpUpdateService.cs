@@ -1,4 +1,7 @@
-﻿namespace JoshHeaps.Net.Services.Implementations;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace JoshHeaps.Net.Services.Implementations;
 
 public class AutoIpUpdateService(
         IConfiguration config,
@@ -99,7 +102,11 @@ public class AutoIpUpdateService(
         }
     }
 
-    record AAAARecord(string Comment, string Content, string Name, string Id);
+    record AAAARecord(
+        [property: JsonPropertyName("comment")] string Comment,
+        [property: JsonPropertyName("content")] string Content,
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("id")] string Id);
 
-    record RecordList(List<AAAARecord> Result);
+    record RecordList([property: JsonPropertyName("result")] List<AAAARecord> Result);
 }
