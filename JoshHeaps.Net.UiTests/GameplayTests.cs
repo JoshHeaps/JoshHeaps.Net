@@ -44,7 +44,7 @@ public class GameplayTests : PageTest
 
         // Create a second browser context for the second player
         await using var browser = await Playwright.Chromium.LaunchAsync();
-        await using var context2 = await browser.NewContextAsync();
+        await using var context2 = await browser.NewContextAsync(ContextOptions());
         var page2 = await context2.NewPageAsync();
         await page2.GotoAsync($"{Config.Test.BaseUrl}/chess");
         await page2.ClickAsync("#startGameBtn");
@@ -109,7 +109,7 @@ public class GameplayTests : PageTest
 
         // Create a second browser context for the second player (black)
         await using var browser = await Playwright.Chromium.LaunchAsync();
-        await using var context2 = await browser.NewContextAsync();
+        await using var context2 = await browser.NewContextAsync(ContextOptions());
         var page2 = await context2.NewPageAsync();
         await page2.GotoAsync($"{Config.Test.BaseUrl}/chess");
         await page2.ClickAsync("#startGameBtn");

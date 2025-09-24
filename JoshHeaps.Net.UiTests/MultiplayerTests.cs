@@ -39,8 +39,8 @@ public class MultiplayerTests : PageTest
     {
         // This test requires running two browser contexts
         await using var browser = await Playwright.Chromium.LaunchAsync();
-        await using var context1 = await browser.NewContextAsync();
-        await using var context2 = await browser.NewContextAsync();
+        await using var context1 = await browser.NewContextAsync(ContextOptions());
+        await using var context2 = await browser.NewContextAsync(ContextOptions());
 
         var page1 = await context1.NewPageAsync();
         var page2 = await context2.NewPageAsync();
