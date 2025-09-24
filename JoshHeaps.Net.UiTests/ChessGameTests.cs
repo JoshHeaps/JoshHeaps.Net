@@ -11,14 +11,7 @@ public class ChessGameTests : PageTest
 
     public override BrowserNewContextOptions ContextOptions()
     {
-        return new BrowserNewContextOptions
-        {
-            ViewportSize = new ViewportSize
-            {
-                Width = Config.Playwright.Viewport.Width,
-                Height = Config.Playwright.Viewport.Height
-            }
-        };
+        return Config.GetBrowserContextOptions();
     }
 
     [OneTimeSetUp]
