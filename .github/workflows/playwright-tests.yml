@@ -28,8 +28,21 @@ jobs:
       run: |
         cd JoshHeaps.Net.UiTests
         dotnet build
+        # Install Chromium browser
         pwsh bin/Debug/net8.0/playwright.ps1 install chromium
-        sudo pwsh bin/Debug/net8.0/playwright.ps1 install-deps chromium
+        # Install system dependencies manually for Ubuntu 24.04 compatibility
+        sudo apt-get update
+        sudo apt-get install -y \
+          libasound2t64 \
+          libatk-bridge2.0-0 \
+          libdrm2 \
+          libxkbcommon0 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxrandr2 \
+          libgbm1 \
+          libxss1 \
+          libasound2-data
 
     - name: Start server in background
       run: |
