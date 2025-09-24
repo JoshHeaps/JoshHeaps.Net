@@ -1,0 +1,92 @@
+name: Playwright Tests
+
+on:
+  pull_request:
+    branches: [ master, main ]
+  push:
+    branches: [ master, main ]
+
+jobs:
+  playwright-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build solution
+      run: dotnet build --no-restore
+
+    - name: Install Playwright browsers
+      run: |
+        cd JoshHeaps.Net.UiTests
+        dotnet build
+        # Install Chromium browser
+        pwsh bin/Debug/net8.0/playwright.ps1 install chromium
+        # Install system dependencies manually for Ubuntu 24.04 compatibility
+        sudo apt-get update
+        sudo apt-get install -y \
+          libasound2t64 \
+          libatk-bridge2.0-0 \
+          libdrm2 \
+          libxkbcommon0 \
+          libxcomposite1 \
+          libxdamage1 \
+          libxrandr2 \
+          libgbm1 \
+          libxss1 \
+          libasound2-data \
+          xvfb
+
+    - name: Start server in background
+      run: |
+        cd JoshHeaps.Net
+        dotnet run --urls "https://localhost:7118" &
+        echo $! > server.pid
+        # Wait for server to start - try health endpoint first, then chess page
+        echo "Waiting for server to start..."
+        timeout 60 bash -c 'until curl -k -s https://localhost:7118/health >/dev/null 2>&1 || curl -k -s https://localhost:7118/chess >/dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+        echo "Server appears to be running"
+        sleep 3
+
+    - name: Run Playwright tests
+      run: |
+        cd JoshHeaps.Net.UiTests
+        xvfb-run -a dotnet test --logger "trx;LogFileName=test-results.trx" --logger "console;verbosity=detailed"
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
+        DISPLAY: :99
+
+    - name: Stop server
+      if: always()
+      run: |
+        if [ -f JoshHeaps.Net/server.pid ]; then
+          kill $(cat JoshHeaps.Net/server.pid) || true
+        fi
+        pkill -f "dotnet run" || true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-test-results
+        path: |
+          JoshHeaps.Net.UiTests/TestResults/
+          JoshHeaps.Net.UiTests/test-results/
+        retention-days: 7
+
+    - name: Upload Playwright videos
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-videos
+        path: JoshHeaps.Net.UiTests/test-results/videos/
+        retention-days: 7
