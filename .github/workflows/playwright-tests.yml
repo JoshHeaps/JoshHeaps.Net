@@ -28,16 +28,19 @@ jobs:
       run: |
         cd JoshHeaps.Net.UiTests
         dotnet build
-        pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
+        pwsh bin/Debug/net8.0/playwright.ps1 install chromium
+        sudo pwsh bin/Debug/net8.0/playwright.ps1 install-deps chromium
 
     - name: Start server in background
       run: |
         cd JoshHeaps.Net
         dotnet run --urls "https://localhost:7118" &
         echo $! > server.pid
-        # Wait for server to start
-        timeout 60 bash -c 'until curl -k https://localhost:7118/health 2>/dev/null; do sleep 1; done' || echo "Server may not have health endpoint, continuing..."
-        sleep 5
+        # Wait for server to start - try health endpoint first, then chess page
+        echo "Waiting for server to start..."
+        timeout 60 bash -c 'until curl -k -s https://localhost:7118/health >/dev/null 2>&1 || curl -k -s https://localhost:7118/chess >/dev/null 2>&1; do echo "Waiting..."; sleep 2; done'
+        echo "Server appears to be running"
+        sleep 3
 
     - name: Run Playwright tests
       run: |
