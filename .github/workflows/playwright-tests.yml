@@ -1,0 +1,73 @@
+name: Playwright Tests
+
+on:
+  pull_request:
+    branches: [ master, main ]
+  push:
+    branches: [ master, main ]
+
+jobs:
+  playwright-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build solution
+      run: dotnet build --no-restore
+
+    - name: Install Playwright browsers
+      run: |
+        cd JoshHeaps.Net.UiTests
+        dotnet build
+        pwsh bin/Debug/net8.0/playwright.ps1 install --with-deps
+
+    - name: Start server in background
+      run: |
+        cd JoshHeaps.Net
+        dotnet run --urls "https://localhost:7118" &
+        echo $! > server.pid
+        # Wait for server to start
+        timeout 60 bash -c 'until curl -k https://localhost:7118/health 2>/dev/null; do sleep 1; done' || echo "Server may not have health endpoint, continuing..."
+        sleep 5
+
+    - name: Run Playwright tests
+      run: |
+        cd JoshHeaps.Net.UiTests
+        dotnet test --logger "trx;LogFileName=test-results.trx" --logger "console;verbosity=detailed"
+      env:
+        HEADED: false  # Force headless mode in CI
+
+    - name: Stop server
+      if: always()
+      run: |
+        if [ -f JoshHeaps.Net/server.pid ]; then
+          kill $(cat JoshHeaps.Net/server.pid) || true
+        fi
+        pkill -f "dotnet run" || true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-test-results
+        path: |
+          JoshHeaps.Net.UiTests/TestResults/
+          JoshHeaps.Net.UiTests/test-results/
+        retention-days: 7
+
+    - name: Upload Playwright videos
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-videos
+        path: JoshHeaps.Net.UiTests/test-results/videos/
+        retention-days: 7
