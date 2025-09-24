@@ -55,7 +55,8 @@ public class TestConfiguration
                 Width = Playwright.Viewport.Width,
                 Height = Playwright.Viewport.Height
             },
-            RecordVideoDir = Playwright.EnableVideoRecording ? Path.Combine(Directory.GetCurrentDirectory(), "test-results", "videos") : null
+            RecordVideoDir = Playwright.EnableVideoRecording ? Path.Combine(Directory.GetCurrentDirectory(), "test-results", "videos") : null,
+            IgnoreHTTPSErrors = Playwright.IgnoreHTTPSErrors
         };
     }
 
@@ -78,6 +79,7 @@ public class PlaywrightSettings
     public float BrowserTimeout { get; set; } = 30000;
     public float ActionTimeout { get; set; } = 10000;
     public bool EnableVideoRecording { get; set; } = false;
+    public bool IgnoreHTTPSErrors { get; set; } = false;
 }
 
 public class ViewportSettings
