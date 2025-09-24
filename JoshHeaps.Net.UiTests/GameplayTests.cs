@@ -39,8 +39,13 @@ public class GameplayTests : PageTest
     {
         // Start a multiplayer game
         await Page.ClickAsync("#startGameBtn");
-        await Page.WaitForTimeoutAsync(3000);
         await Page.WaitForSelectorAsync(".chessPiece");
+
+        if (await Page.Locator("#square-55:has(img[src='/images/Chess Images/WhitePawn.svg'])").CountAsync() == 0)
+        {
+            await Page.ClickAsync("#startGameBtn");
+            await Page.WaitForSelectorAsync(".chessPiece");
+        }
 
         // Create a second browser context for the second player
         await using var browser = await Playwright.Chromium.LaunchAsync();
@@ -48,7 +53,6 @@ public class GameplayTests : PageTest
         var page2 = await context2.NewPageAsync();
         await page2.GotoAsync($"{Config.Test.BaseUrl}/chess");
         await page2.ClickAsync("#startGameBtn");
-        await page2.WaitForTimeoutAsync(3000);
         await page2.WaitForSelectorAsync(".chessPiece");
 
         /*
@@ -106,6 +110,12 @@ public class GameplayTests : PageTest
         // Start a multiplayer game
         await Page.ClickAsync("#startGameBtn");
         await Page.WaitForSelectorAsync(".chessPiece");
+
+        if (await Page.Locator("#square-55:has(img[src='/images/Chess Images/WhitePawn.svg'])").CountAsync() == 0)
+        {
+            await Page.ClickAsync("#startGameBtn");
+            await Page.WaitForSelectorAsync(".chessPiece");
+        }
 
         // Create a second browser context for the second player (black)
         await using var browser = await Playwright.Chromium.LaunchAsync();
