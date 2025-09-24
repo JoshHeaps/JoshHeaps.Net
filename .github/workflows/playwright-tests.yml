@@ -42,7 +42,8 @@ jobs:
           libxrandr2 \
           libgbm1 \
           libxss1 \
-          libasound2-data
+          libasound2-data \
+          xvfb
 
     - name: Start server in background
       run: |
@@ -58,9 +59,11 @@ jobs:
     - name: Run Playwright tests
       run: |
         cd JoshHeaps.Net.UiTests
-        dotnet test --logger "trx;LogFileName=test-results.trx" --logger "console;verbosity=detailed"
+        xvfb-run -a dotnet test --logger "trx;LogFileName=test-results.trx" --logger "console;verbosity=detailed"
       env:
-        HEADED: false  # Force headless mode in CI
+        CI: true
+        GITHUB_ACTIONS: true
+        DISPLAY: :99
 
     - name: Stop server
       if: always()
