@@ -23,7 +23,7 @@
     transition: color 0.5s ease, font 0.5s ease;
 }
 
-#WelcomeMessage {
+/*#WelcomeMessage {
     font: 3vw arial;
     width: auto;
     height: 40vw;
@@ -31,7 +31,7 @@
     text-align: left;
     padding-left: 10vw;
     padding-right: 10vw;
-}
+}*/
 
 #DemosBox {
     margin: 10vw;
