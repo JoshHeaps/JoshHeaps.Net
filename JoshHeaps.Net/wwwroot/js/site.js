@@ -3,5 +3,5 @@
     element.style.display = "none"; // Trigger reflow
     element.offsetHeight; // Force reflow
     element.style.display = ""; // Restore the original display
-    typeText("#WelcomeMessage", "Hey! You found me! Since I have your attention, why don't I tell you about myself?");
+    typeText("#WelcomeMessage", "Today, October 2nd, marks the 5th anniversary of the day I was sealed for time and all eternity to my wonderful wife. She's the kindest, sweetest, funniest, most beautiful woman I've ever met. I love you Morgan 💖");
 }
