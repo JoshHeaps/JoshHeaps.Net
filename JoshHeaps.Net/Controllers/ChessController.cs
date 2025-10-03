@@ -18,8 +18,12 @@ public class ChessController(
     /// Store of ongoing games.
     /// </summary>
     private static readonly ConcurrentDictionary<Guid, GameState> _games = [];
+    private static readonly ConcurrentDictionary<Guid, Task> _gameRemovalTasks = [];
+    private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> _gameRemovalCancellationTokens = [];
 
-    private static ConcurrentDictionary<Guid, Task> _gameRemovalTasks = [];
+    private static readonly TimeSpan _computerGameTimeout = TimeSpan.FromHours(1);
+    private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _gameCleanupTimeout = TimeSpan.FromMinutes(1);
 
     /// <summary>
     /// Create a new chess game and store it in-memory.
@@ -57,7 +61,7 @@ public class ChessController(
             });
         }
 
-        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromHours(1));
+        ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
 
         return Ok(new
         {
@@ -99,7 +103,7 @@ public class ChessController(
             isWhite = false;
         }
 
-        ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
+        ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
         return Ok(new
         {
@@ -178,18 +182,11 @@ public class ChessController(
             return BadRequest(result);
 
         if (result.IsCheckmate || result.IsStalemate)
-        {
-            // queue game removal
-            ScheduleRemoveGame(gameState.GameId, TimeSpan.FromMinutes(1));
-        }
+            ScheduleRemoveGame(gameState.GameId, _gameCleanupTimeout);
+        else if (gameState.IsVsComputer)
+            ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
         else
-        {
-            // increase timeout if play continues.
-            if (gameState.IsVsComputer)
-                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromHours(1));
-            else
-                ScheduleRemoveGame(gameState.GameId, TimeSpan.FromDays(1));
-        }
+            ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
         if (gameState.IsVsComputer && gameState.Computer is not null)
             queue.Queue(() => gameState.Computer.MakeMove(gameState, chessHub, chessService));
@@ -232,31 +229,36 @@ public class ChessController(
 
     private static void ScheduleRemoveGame(Guid id, TimeSpan delay)
     {
-        if (_gameRemovalTasks.ContainsKey(id))
+        if (_gameRemovalCancellationTokens.TryRemove(id, out var oldCts))
         {
-            _gameRemovalTasks[id] = Task.Run(async () =>
-            {
-                await Task.Delay(delay);
-
-                if (_games[id].Computer is not null)
-                    await _games[id].Computer!.DisposeAsync();
-
-                _games.Remove(id, out _);
-                _gameRemovalTasks.Remove(id, out _);
-            });
-
-            return;
+            oldCts.Cancel();
+            oldCts.Dispose();
         }
 
-        _gameRemovalTasks.TryAdd(id, Task.Run(async () =>
+        var cts = new CancellationTokenSource();
+        _gameRemovalCancellationTokens[id] = cts;
+
+        _gameRemovalTasks[id] = Task.Run(async () =>
         {
-            await Task.Delay(delay);
+            try
+            {
+                await Task.Delay(delay, cts.Token);
 
-            if (_games[id].Computer is not null)
-                await _games[id].Computer!.DisposeAsync();
+                if (_games.TryGetValue(id, out var game) && game.Computer is not null)
+                    await game.Computer.DisposeAsync();
 
-            _games.Remove(id, out _);
-            _gameRemovalTasks.Remove(id, out _);
-        }));
+                _games.Remove(id, out _);
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                if (_gameRemovalCancellationTokens.TryGetValue(id, out var currentCts) && currentCts == cts)
+                {
+                    _gameRemovalCancellationTokens.TryRemove(id, out _);
+                }
+
+                cts.Dispose();
+            }
+        });
     }
 }
