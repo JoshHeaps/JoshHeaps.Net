@@ -9,7 +9,10 @@ namespace JoshHeaps.Net.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ChessController(IChessService chessService, IHubContext<ChessHub> chessHub, IBackgroundTaskQueue queue) : ControllerBase
+public class ChessController(
+    IChessService chessService,
+    IHubContext<ChessHub> chessHub,
+    IBackgroundTaskQueue queue) : ControllerBase
 {
     /// <summary>
     /// Store of ongoing games.
