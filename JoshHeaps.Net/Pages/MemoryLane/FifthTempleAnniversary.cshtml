@@ -1,0 +1,69 @@
+@page
+@model JoshHeaps.Net.Pages.MemoryLane.FifthTempleAnniversary
+@{
+    ViewData["Title"] = "Happy 5th Anniversary, Morgan!";
+    Layout = "_Layout";
+}
+
+<div class="anniversary-container">
+    <h1 class="anniversary-header">Happy 5th Anniversary, Morgan!</h1>
+
+    <div id="WelcomeMessage"></div>
+
+    <div class="hearts">💖 💕 💗</div>
+
+    <div class="photo-gallery">
+        <div class="photo-frame">
+            <div class="photo-wrapper">
+                <img src="/images/Wife Images/45053.jpeg" alt="Morgan with our beautiful baby">
+            </div>
+            <div class="photo-caption">The most amazing mother to our precious child</div>
+        </div>
+
+        <div class="photo-frame">
+            <div class="photo-wrapper">
+                <img src="/images/Wife Images/45054.jpeg" alt="Josh and Morgan together">
+            </div>
+            <div class="photo-caption">My best friend and eternal companion</div>
+        </div>
+    </div>
+
+    <div class="love-message">
+        <h2>Five Years of Forever</h2>
+        <p>
+            Five years ago today, on October 2nd, 2020, I knelt across the altar from you in the temple
+            and we were sealed for time and all eternity. It was the best decision I ever made.
+        </p>
+        <p>
+            Morgan, you are everything I could have ever hoped for and so much more. You're not just
+            my wife—you're my best friend, my partner in every adventure, and the love of my life.
+        </p>
+        <p>
+            You make me laugh every single day. Your kindness touches everyone around you. Your
+            strength amazes me. Your beauty, inside and out, takes my breath away. Watching you
+            become a mother has shown me depths of love and dedication I never knew existed.
+        </p>
+        <p>
+            Thank you for five incredible years of love, laughter, growth, and joy. Thank you for
+            choosing me, for believing in me, and for building this beautiful life with me.
+        </p>
+        <p>
+            Here's to five years down and an eternity to go. I love you more today than yesterday,
+            and I'll love you even more tomorrow.
+        </p>
+        <p style="font-size: 1.5rem; margin-top: 2rem; color: #764ba2;">
+            <strong>I love you, Morgan. Forever and always. 💖</strong>
+        </p>
+    </div>
+
+    <div class="hearts">💝 💞 💓</div>
+</div>
+
+@section Styles {
+    <link href="/css/anniversary/page.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+}
+
+@section Scripts {
+    <script src="/js/anniversary/page.js"></script>
+    <script src="/js/utils.js"></script>
+}
