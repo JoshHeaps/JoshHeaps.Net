@@ -29,7 +29,10 @@ function changeIntervalTime(element, text) {
 function simulateTyping(element, text, speed = 50) {
     intervalId = setInterval(() => {
         if (index < text.length) {
-            currentText += text.charAt(index);
+            if (text.charAt(index) === '`')
+                currentText = currentText.slice(0, -1);
+            else
+                currentText += text.charAt(index);
             changeIntervalTime(element, text);
             index++;
             element.textContent = currentText;

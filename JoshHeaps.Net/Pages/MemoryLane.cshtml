@@ -1,0 +1,54 @@
+@page
+@model JoshHeaps.Net.Pages.MemoryLaneModel
+@{
+    ViewData["Title"] = "Memory Lane";
+    Layout = "_Layout";
+}
+
+<div class="memory-lane-container">
+    <h1 class="memory-lane-header">Memory Lane</h1>
+    <p class="memory-lane-subtitle">Special moments and celebrations from our life together</p>
+
+    <div class="events-grid">
+        <a href="/memoryLane/fifthTempleAnniversary" class="event-card">
+            <div class="event-icon">💝</div>
+            <div class="event-title">Our 5th Sealing Anniversary</div>
+            <div class="event-description">
+                Celebrating the fifth year of our eternal journey together
+            </div>
+        </a>
+
+        <div class="event-card disabled">
+            <div class="event-icon">🎂</div>
+            <div class="event-title">Birthdays & Births</div>
+            <div class="event-description">
+                Welcoming new life and celebrating another year
+            </div>
+            <div class="coming-soon">Coming soon...</div>
+        </div>
+
+        <div class="event-card disabled">
+            <div class="event-icon">🌟</div>
+            <div class="event-title">Milestones</div>
+            <div class="event-description">
+                Big achievements and unforgettable moments
+            </div>
+            <div class="coming-soon">Coming soon...</div>
+        </div>
+
+        <div class="event-card disabled">
+            <div class="event-icon">✨</div>
+            <div class="event-title">More Memories</div>
+            <div class="event-description">
+                Even more special occasions and celebrations
+            </div>
+            <div class="coming-soon">Coming soon...</div>
+        </div>
+    </div>
+
+    <a href="/" class="home-button">← Back to Home</a>
+</div>
+
+@section Styles {
+    <link href="/css/memoryLane/page.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+}
