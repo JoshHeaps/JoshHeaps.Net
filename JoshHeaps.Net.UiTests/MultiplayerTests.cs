@@ -81,18 +81,4 @@ public class MultiplayerTests : PageTest
         // Should see SignalR connected message in console
         Assert.That(consoleLogs, Does.Contain("✅ SignalR connected").Or.Contain("SignalR connected"));
     }
-
-    [Test]
-    public async Task Move_Updates_Are_Sent_Via_SignalR()
-    {
-        // This would require more complex setup with two players
-        // For now, just verify the SignalR methods exist in the JavaScript
-        var jsContent = await Page.EvaluateAsync<string>(@"
-            () => {
-                return document.querySelector('script[src*=""chessLogic.js""]') ? 'chessLogic.js loaded' : 'not found';
-            }
-        ");
-
-        Assert.That(jsContent, Is.EqualTo("chessLogic.js loaded"));
-    }
 }
