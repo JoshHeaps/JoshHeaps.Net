@@ -8,31 +8,23 @@ public class AutoIpUpdateService(
         ILogger<AutoIpUpdateService> log)
     : BackgroundService
 {
-    private static readonly TimeSpan CheckInterval = TimeSpan.FromMinutes(5);
-    private static readonly HttpClient httpClient = new();
     public static bool IsEnabled { get; private set; } = false;
+
+    private static readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(1);
+    private static readonly HttpClient _httpClient = new();
 
     protected override async Task ExecuteAsync(CancellationToken stop)
     {
         IsEnabled = true;
-        var timer = new PeriodicTimer(CheckInterval);
-        AAAARecord dnsRecord = await GetDnsRecordAsync();
-        string lastKnownIp = dnsRecord.Content;
+        var timer = new PeriodicTimer(_checkInterval);
 
         while (await timer.WaitForNextTickAsync(stop))
         {
             try
             {
-                string currentIp = await GetPublicIpAsync() ?? "";
-
-                if (lastKnownIp != currentIp)
-                {
-                    await UpdateDnsIpAsync(config, dnsRecord, currentIp);
-
-                    lastKnownIp = currentIp;
-                }
+                await UpdateIpAddressIfChanged();
             }
-            catch (OperationCanceledException) { /* shutting down */ }
+            catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
                 log.LogError(ex, "Error while attempting ip update");
@@ -40,11 +32,33 @@ public class AutoIpUpdateService(
         }
     }
 
+    private async Task UpdateIpAddressIfChanged()
+    {
+        var dnsRecords = await GetDnsRecordAsync();
+        string dnsRecordIp = dnsRecords[0].Content;
+
+        if (!dnsRecords.Records.All(x => x.Content == dnsRecords[0].Content))
+            dnsRecordIp = string.Empty;
+
+        string publicIp = await GetPublicIpAsync() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(publicIp) || dnsRecordIp == publicIp)
+            return;
+
+        foreach (var dnsRecord in dnsRecords.Records)
+        {
+            if (dnsRecord.Content == publicIp)
+                continue;
+
+            await UpdateDnsIpAsync(config, dnsRecord, publicIp);
+        }
+    }
+
     private static async Task<string> GetPublicIpAsync()
     {
         try
         {
-            return await httpClient.GetStringAsync(@"https://api.ipify.org/");
+            return await _httpClient.GetStringAsync(@"https://api.ipify.org/");
         }
         catch
         {
@@ -55,7 +69,7 @@ public class AutoIpUpdateService(
         }
     }
 
-    private async Task<AAAARecord> GetDnsRecordAsync()
+    private async Task<RecordList> GetDnsRecordAsync()
     {
         try
         {
@@ -64,8 +78,8 @@ public class AutoIpUpdateService(
             cfClient.DefaultRequestHeaders.Add("X-Auth-Key", config["cfKey"]);
             var result = await cfClient.GetAsync(@$"https://api.cloudflare.com/client/v4/zones/{config["zoneId"]}/dns_records");
             Console.WriteLine(await result.Content.ReadAsStringAsync());
-            var records = System.Text.Json.JsonSerializer.Deserialize<RecordList>(await result.Content.ReadAsStringAsync());
-            return records!.Result[0];
+            var records = JsonSerializer.Deserialize<RecordList>(await result.Content.ReadAsStringAsync());
+            return records!;
         }
         catch
         {
@@ -76,22 +90,23 @@ public class AutoIpUpdateService(
         }
     }
 
-    private static async Task UpdateDnsIpAsync(IConfiguration config, AAAARecord record, string ip)
+    private static async Task UpdateDnsIpAsync(IConfiguration config, DnsRecord record, string ip)
     {
         HttpClient cfClient = new();
         cfClient.DefaultRequestHeaders.Add("X-Auth-Email", config["cfEmail"]);
         cfClient.DefaultRequestHeaders.Add("X-Auth-Key", config["cfKey"]);
-        object content = new
+
+        object updateRequestBody = new
         {
-            comment = "Update as needed",
+            name = record.Name,
+            ttl = record.Ttl,
+            type = record.Type,
+            comment = record.Comment,
             content = ip,
-            name = "@",
-            proxied = true,
-            ttl = 3600,
-            type = "AAAA"
+            proxied = record.Proxied,
         };
 
-        var result = await cfClient.PutAsJsonAsync(@$"https://api.cloudflare.com/client/v4/zones/{config["zoneId"]}/dns_records{record.Id}", content);
+        var result = await cfClient.PatchAsJsonAsync(@$"https://api.cloudflare.com/client/v4/zones/{config["zoneId"]}/dns_records/{record.Id}", updateRequestBody);
 
         if (!result.IsSuccessStatusCode)
         {
@@ -102,11 +117,23 @@ public class AutoIpUpdateService(
         }
     }
 
-    record AAAARecord(
+    record DnsRecord(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("ttl")] int Ttl,
+        [property: JsonPropertyName("type")] string Type,
         [property: JsonPropertyName("comment")] string Comment,
         [property: JsonPropertyName("content")] string Content,
-        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("proxied")] bool Proxied,
         [property: JsonPropertyName("id")] string Id);
 
-    record RecordList([property: JsonPropertyName("result")] List<AAAARecord> Result);
+    record RecordList([property: JsonPropertyName("result")] List<DnsRecord> Records)
+    {
+        public DnsRecord this[int index]
+        {
+            get
+            {
+                return Records[index];
+            }
+        }
+    }
 }

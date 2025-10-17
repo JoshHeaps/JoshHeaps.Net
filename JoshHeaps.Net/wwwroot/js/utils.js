@@ -12,18 +12,19 @@
 let intervalId;
 let index = 0;
 const punctuation = ['.', '!', '?'];
+const punctuationDict = {
+    '.': 150,
+    '!': 200,
+    '?': 200,
+    ',': 100,
+    '`': 25,
+};
 
 let currentText = "";
 
 function changeIntervalTime(element, text) {
-    if (punctuation.includes(text.charAt(index))) {
-        clearInterval(intervalId);
-        simulateTyping(element, text, 200);
-    }
-    else {
-        clearInterval(intervalId);
-        simulateTyping(element, text);
-    }
+    clearInterval(intervalId);
+    simulateTyping(element, text, punctuationDict[text.charAt(index)] ?? 50);
 }
 
 function simulateTyping(element, text, speed = 50) {

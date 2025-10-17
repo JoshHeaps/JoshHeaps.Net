@@ -22,7 +22,7 @@ public class ChessController(
     private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> _gameRemovalCancellationTokens = [];
 
     private static readonly TimeSpan _computerGameTimeout = TimeSpan.FromHours(1);
-    private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromDays(1);
     private static readonly TimeSpan _gameCleanupTimeout = TimeSpan.FromMinutes(1);
 
     /// <summary>
