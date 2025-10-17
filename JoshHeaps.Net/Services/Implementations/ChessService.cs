@@ -548,11 +548,7 @@ public class ChessService : IChessService
         => GenerateSlidingMoves(gs, piece, [(1, 1), (1, -1), (-1, 1), (-1, -1)]);
 
     private static List<Position> GenerateQueenMoves(GameState gs, ChessPiece piece)
-        => GenerateSlidingMoves(gs, piece,
-        [
-            (1, 0), (-1, 0), (0, 1), (0, -1),
-            (1, 1), (1, -1), (-1, 1), (-1, -1)
-        ]);
+        => [..GenerateRookMoves(gs, piece), ..GenerateBishopMoves(gs, piece)];
 
     private static List<Position> GenerateSlidingMoves(GameState gs, ChessPiece piece, (int dr, int dc)[] directions)
     {
