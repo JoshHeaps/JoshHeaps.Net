@@ -11,6 +11,19 @@ public class ApiTests : PageTest
     private IAPIRequestContext? _apiContext;
     private TestConfiguration Config => TestConfiguration.Instance;
 
+    [OneTimeSetUp]
+    public async Task OneTimeSetUp()
+    {
+        if (!Config.Playwright.Headless)
+        {
+            Environment.SetEnvironmentVariable("HEADED", "1");
+        }
+        if (Config.Playwright.SlowMotion > 0)
+        {
+            Environment.SetEnvironmentVariable("PWSLOWMO", Config.Playwright.SlowMotion.ToString());
+        }
+    }
+
     [SetUp]
     public async Task Setup()
     {
