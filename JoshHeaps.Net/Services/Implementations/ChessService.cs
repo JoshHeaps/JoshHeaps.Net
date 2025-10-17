@@ -110,7 +110,6 @@ public class ChessService : IChessService
         var piece = gameState.Pieces.FirstOrDefault(p => p.Id == pieceId);
 
         if (piece == null) return [];
-        if (piece.Color != gameState.CurrentPlayer) return [];
 
         var candidateMoves = GenerateCandidateMoves(gameState, piece);
         var legalMoves = new List<Position>();
@@ -529,7 +528,14 @@ public class ChessService : IChessService
             var ep = gs.EnPassantTarget.Value;
 
             if (ep.Row == forward1 && Math.Abs(ep.Col - startCol) == 1)
-                moves.Add(ep);
+            {
+                // Verify there's an enemy pawn to capture
+                int enemyPawnRow = piece.Color == PieceColor.White ? ep.Row + 1 : ep.Row - 1;
+                var enemyPawn = gs.Board[enemyPawnRow, ep.Col];
+
+                if (enemyPawn != null && enemyPawn.Type == PieceType.Pawn && enemyPawn.Color != piece.Color)
+                    moves.Add(ep);
+            }
         }
 
         return moves;
@@ -542,11 +548,7 @@ public class ChessService : IChessService
         => GenerateSlidingMoves(gs, piece, [(1, 1), (1, -1), (-1, 1), (-1, -1)]);
 
     private static List<Position> GenerateQueenMoves(GameState gs, ChessPiece piece)
-        => GenerateSlidingMoves(gs, piece,
-        [
-            (1, 0), (-1, 0), (0, 1), (0, -1),
-            (1, 1), (1, -1), (-1, 1), (-1, -1)
-        ]);
+        => [..GenerateRookMoves(gs, piece), ..GenerateBishopMoves(gs, piece)];
 
     private static List<Position> GenerateSlidingMoves(GameState gs, ChessPiece piece, (int dr, int dc)[] directions)
     {

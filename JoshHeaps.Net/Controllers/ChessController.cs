@@ -22,7 +22,7 @@ public class ChessController(
     private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> _gameRemovalCancellationTokens = [];
 
     private static readonly TimeSpan _computerGameTimeout = TimeSpan.FromHours(1);
-    private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromDays(1);
     private static readonly TimeSpan _gameCleanupTimeout = TimeSpan.FromMinutes(1);
 
     /// <summary>
@@ -165,7 +165,7 @@ public class ChessController(
         var expectedPlayerId = isWhiteMove ? gameState.WhitePlayerId : gameState.BlackPlayerId;
 
         if (moveDto.PlayerId != expectedPlayerId)
-            return Forbid("You are not the current player.");
+            return StatusCode(403, "You are not the current player.");
 
         // Make sure player owns the piece
         var piece = gameState.Pieces.FirstOrDefault(p => p.Id == moveDto.PieceId);
@@ -174,7 +174,7 @@ public class ChessController(
             return NotFound("Chess piece Id does not exist");
 
         if ((isWhiteMove && piece.Color != PieceColor.White) || (!isWhiteMove && piece?.Color != PieceColor.Black))
-            return Forbid("You cannot move this piece.");
+            return StatusCode(403, "You cannot move this piece.");
 
         var result = chessService.MakeMove(gameState, moveDto);
 

@@ -1,6 +1,7 @@
 const ChessBoard = {
     renderPieces(pieces) {
         this.clearAllSquares();
+        this.renderCoordinateLabels();
         this.placePieces(pieces);
         this.setupSquareEventHandlers();
         this.highlightPreviousMove();
@@ -105,6 +106,39 @@ const ChessBoard = {
 
                 ChessAPI.handleMove(targetRow, targetCol);
             };
+        }
+    },
+
+    renderCoordinateLabels() {
+        const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+        const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+        // If player is black, reverse the coordinates
+        if (!GameState.currentPlayerIsWhite) {
+            files.reverse();
+            ranks.reverse();
+        }
+
+        for (let i = 0; i < 64; i++) {
+            const square = document.getElementById(`square-${i}`);
+            const row = Math.floor(i / 8);
+            const col = i % 8;
+
+            // Add rank label (1-8) on the leftmost column
+            if (col === 0) {
+                const rankLabel = document.createElement('span');
+                rankLabel.className = 'coordinate-label row-label';
+                rankLabel.textContent = ranks[row];
+                square.appendChild(rankLabel);
+            }
+
+            // Add file label (a-h) on the bottom row
+            if (row === 7) {
+                const fileLabel = document.createElement('span');
+                fileLabel.className = 'coordinate-label col-label';
+                fileLabel.textContent = files[col];
+                square.appendChild(fileLabel);
+            }
         }
     }
 };
