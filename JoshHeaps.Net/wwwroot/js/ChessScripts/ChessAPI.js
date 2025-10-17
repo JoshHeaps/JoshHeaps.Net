@@ -27,9 +27,14 @@ const ChessAPI = {
             body: JSON.stringify(moveDto)
         });
 
+        if (!response.ok) {
+            let message = await response.text();
+            throw new Error(message || "Invalid move or not your turn.");
+        }
+
         const result = await response.json();
 
-        if (!response.ok || !result.success) {
+        if (!result.success) {
             throw new Error(result.message || "Invalid move or not your turn.");
         }
 
