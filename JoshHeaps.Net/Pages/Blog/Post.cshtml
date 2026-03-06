@@ -1,0 +1,32 @@
+@page "/blog/{slug}"
+@model JoshHeaps.Net.Pages.Blog.PostModel
+@{
+    ViewData["Title"] = Model.Post!.Title + " - JoshHeaps.Net";
+    Layout = "_Layout";
+}
+
+<article class="blog-post">
+    <a href="/blog" class="blog-back">&larr; Back to blog</a>
+
+    <header class="blog-post-header">
+        <h1 class="blog-post-title">@Model.Post.Title</h1>
+        <time class="blog-post-date" datetime="@Model.Post.PublishedDate.ToString("yyyy-MM-dd")">
+            @Model.Post.PublishedDate.ToString("MMMM d, yyyy")
+        </time>
+        <div class="blog-post-tags">
+            @foreach (var tag in Model.Post.Tags)
+            {
+                <a href="/blog?tag=@tag" class="blog-tag">@tag</a>
+            }
+        </div>
+    </header>
+
+    <div class="post-content">
+        @Html.Raw(Model.Post.HtmlContent)
+    </div>
+</article>
+
+@section Styles {
+    <link href="/css/variables.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+    <link href="/css/blog/post.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+}

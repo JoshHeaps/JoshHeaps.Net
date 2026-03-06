@@ -1,0 +1,49 @@
+@page
+@model JoshHeaps.Net.Pages.BlogModel
+@{
+    ViewData["Title"] = "Blog - JoshHeaps.Net";
+    Layout = "_Layout";
+}
+
+<div class="blog-index">
+    <h1 class="blog-title">Blog</h1>
+
+    @if (Model.ActiveTag is not null)
+    {
+        <div class="blog-filter">
+            <span>Filtered by: <strong>@Model.ActiveTag</strong></span>
+            <a href="/blog">Clear filter</a>
+        </div>
+    }
+
+    @if (Model.Posts.Count == 0)
+    {
+        <p class="blog-empty">No posts yet. Check back soon!</p>
+    }
+
+    <div class="blog-list">
+        @foreach (var post in Model.Posts)
+        {
+            <article class="blog-card">
+                <a href="/blog/@post.Slug" class="blog-card-link">
+                    <h2 class="blog-card-title">@post.Title</h2>
+                </a>
+                <time class="blog-card-date" datetime="@post.PublishedDate.ToString("yyyy-MM-dd")">
+                    @post.PublishedDate.ToString("MMMM d, yyyy")
+                </time>
+                <p class="blog-card-summary">@post.Summary</p>
+                <div class="blog-card-tags">
+                    @foreach (var tag in post.Tags)
+                    {
+                        <a href="/blog?tag=@tag" class="blog-tag">@tag</a>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+</div>
+
+@section Styles {
+    <link href="/css/variables.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+    <link href="/css/blog/index.css?v=@ViewData["cssVersion"]" rel="stylesheet" type="text/css" />
+}

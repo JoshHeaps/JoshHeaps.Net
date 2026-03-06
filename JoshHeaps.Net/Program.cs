@@ -12,6 +12,13 @@ builder.Services.AddControllers();
 
 builder.Services.AddSignalR();
 
+builder.Services.AddHttpClient("BlogApi", client =>
+{
+    var baseUrl = configuration["BlogApi:BaseUrl"] ?? "https://media.joshheaps.net";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddSingleton<IBlogService, BlogService>();
 builder.Services.AddSingleton<IChessService, ChessService>();
 builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
 
