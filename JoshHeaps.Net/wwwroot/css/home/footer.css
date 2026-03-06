@@ -1,17 +1,25 @@
-﻿#Contacts {
-    margin-top: 20vw;
+/* ── Footer / Contacts ── */
+
+#Contacts {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    padding: clamp(4rem, 8vw, 6rem) 0 clamp(3rem, 5vw, 4rem);
+}
+
+.social-link {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
 }
 
 .social-icon {
     height: auto;
-    width: 3.5vw;
-    margin-bottom: 5vw;
-    margin-left: 3vw;
-    fill: rgb(212, 212, 212);
-    transition: fill 0.5s;
+    width: clamp(1.25rem, 2.5vw, 1.75rem);
+    fill: var(--color-text-subtle);
+    transition: fill 0.2s;
 }
 
-.social-icon:hover {
-    fill: white;
-    transition: fill 0.5s;
+.social-link:hover .social-icon {
+    fill: var(--color-heading-secondary);
 }

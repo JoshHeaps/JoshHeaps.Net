@@ -45,9 +45,9 @@ function simulateTyping(element, text, speed = 50) {
 
 function showClickedContents(option) {
     if (option === 'projects') {
-        document.querySelector("#ChessProject > div.diagonal-section-left").scrollIntoView({
+        document.querySelector("#ProjectsBox").scrollIntoView({
             behavior: "smooth",
-            block: "center",
+            block: "start",
             inline: "nearest"
         });
     }
@@ -63,6 +63,13 @@ function showClickedContents(option) {
     }
     else if (option === 'demos') {
         document.querySelector("#DemosBox").scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+            inline: "nearest"
+        });
+    }
+    else if (option === 'blog') {
+        document.querySelector("#BlogBox").scrollIntoView({
             behavior: "smooth",
             block: "start",
             inline: "nearest"

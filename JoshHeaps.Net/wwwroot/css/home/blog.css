@@ -1,0 +1,65 @@
+/* ── Blog Section ── */
+
+#BlogBox {
+    max-width: 1100px;
+    margin: clamp(4rem, 8vw, 8rem) auto;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+}
+
+#blogPostsList {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.blog-teaser-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 1.25rem 1.5rem;
+    border-left: 2px solid var(--color-accent-border);
+    background: var(--color-surface);
+    border-radius: 0 8px 8px 0;
+    transition: background 0.2s;
+}
+
+.blog-teaser-item:hover {
+    background: var(--color-surface-hover);
+}
+
+.blog-teaser-title {
+    font-size: clamp(1rem, 1.5vw, 1.15rem);
+    font-weight: 600;
+    color: var(--color-heading-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.blog-teaser-title:hover {
+    color: var(--color-accent);
+}
+
+.blog-teaser-date {
+    font-size: 0.75rem;
+    color: var(--color-text-subtle);
+}
+
+.blog-teaser-summary {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin: 0.25rem 0 0;
+    line-height: 1.6;
+}
+
+.blog-view-all {
+    display: inline-block;
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+    color: var(--color-accent);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.blog-view-all:hover {
+    color: var(--color-accent-hover);
+}

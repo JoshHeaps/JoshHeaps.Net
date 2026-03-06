@@ -1,67 +1,134 @@
-﻿body {
-    margin: 0px;
-    background-color: #2b2c30;
-    color: #09ff00;
-    overflow-x: hidden;
-    cursor: default;
+*, *::before, *::after {
+    box-sizing: border-box;
 }
+
+body {
+    margin: 0;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    overflow-x: hidden;
+    font-family: var(--font-body);
+    line-height: 1.6;
+}
+
+/* ── Navigation ── */
 
 #Header {
-    margin-top: 2vw;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem clamp(1.5rem, 5vw, 4rem);
 }
 
-.headerOption {
-    font: bold 2vw arial;
-    display: inline;
-    margin-left: 10vw;
+.site-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-heading);
+    letter-spacing: -0.01em;
+}
+
+.nav-links {
+    display: flex;
+    gap: clamp(1.25rem, 3vw, 2.5rem);
+}
+
+.nav-link {
+    font-size: 0.875rem;
+    color: var(--color-text-subtle);
     cursor: pointer;
-    transition: color 0.5s ease, font 0.5s ease;
+    transition: color 0.2s;
+    text-decoration: none;
 }
 
-.headerOption:hover {
-    font: bold 2.3vw arial;
-    transition: color 0.5s ease, font 0.5s ease;
+.nav-link:hover {
+    color: var(--color-heading-secondary);
+}
+
+/* ── Hero / Welcome Message ── */
+
+#Hero {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: clamp(4rem, 10vw, 8rem) clamp(1.5rem, 5vw, 4rem) clamp(4rem, 8vw, 6rem);
 }
 
 #WelcomeMessage {
-    font: 3vw arial;
-    width: auto;
-    height: 40vw;
-    margin-top: 15vw;
-    text-align: left;
-    padding-left: 10vw;
-    padding-right: 10vw;
+    font-size: clamp(1.25rem, 2.2vw, 1.75rem);
+    max-width: 720px;
+    min-height: clamp(12rem, 28vw, 20rem);
+    line-height: 1.7;
+    color: var(--color-accent);
+    font-family: var(--font-mono);
 }
+
+/* ── Section Titles ── */
+
+.section-title {
+    font-size: clamp(1.3rem, 2.2vw, 1.75rem);
+    font-weight: 700;
+    color: var(--color-heading);
+    margin: 0 0 clamp(1.5rem, 3vw, 2.5rem);
+    letter-spacing: -0.02em;
+}
+
+/* ── Demos ── */
 
 #DemosBox {
-    margin: 10vw;
-    display: flex;
-    flex-direction: column;
-    justify-content: end;
-    width: 80%;
+    max-width: 1100px;
+    margin: clamp(4rem, 8vw, 8rem) auto;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
 }
 
-#DemoHeader {
-    margin: 0;
-    color: rgb(212, 212, 212);
-    font-size: 4vw;
+#buttonWrapper {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+    gap: 0.75rem;
 }
 
 .demoButton {
-    margin-top: 5vw;
-    margin-right: 2vw;
-    padding-top: 0.5vw;
-    padding-bottom: 0.5vw;
+    padding: 0.875rem 1.25rem;
     text-align: center;
-    border: none;
-    border-radius: 5vw;
-    width: 20vw;
-    height: 8vw;
-    font-size: 2vw;
-    background-color: rgb(104, 255, 0, 0.39);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-family: inherit;
+    background: var(--color-surface);
+    color: var(--color-text);
     cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.demoButton:hover {
+    background: var(--color-surface-hover);
+    border-color: var(--color-border-hover);
+    color: var(--color-heading-secondary);
 }
 
 #MoreFiller {
     cursor: default;
+    opacity: 0.3;
+}
+
+#MoreFiller:hover {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+/* ── Mobile ── */
+
+@media (max-width: 600px) {
+    #Header {
+        padding: 1.25rem 1.25rem;
+    }
+
+    .site-name {
+        font-size: 0.95rem;
+    }
+
+    .nav-link {
+        font-size: 0.8rem;
+    }
 }
