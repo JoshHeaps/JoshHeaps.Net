@@ -1,0 +1,154 @@
+/* Prism.js Tomorrow Night theme (customized) */
+/* Original: https://github.com/PrismJS/prism/blob/master/themes/prism-tomorrow.css */
+
+/* ============================================
+   Theme colors — edit these to restyle
+   ============================================ */
+:root {
+    --prism-background:   #0a0a0a;
+    --prism-text:         #909090;
+    --prism-comment:      #555;
+    --prism-punctuation:  #707070;
+    --prism-tag:          #09ff00;
+    --prism-function:     #fff;
+    --prism-boolean:      #1ab815;
+    --prism-number:       #1ab815;
+    --prism-property:     #c8c8c8;
+    --prism-class:        #c8c8c8;
+    --prism-keyword:      #09ff00;
+    --prism-string:       #43c760;
+    --prism-variable:     #43c760;
+    --prism-operator:     #999;
+    --prism-inserted:     #09ff00;
+}
+
+code[class*="language-"],
+pre[class*="language-"] {
+    color: var(--prism-text);
+    background: none;
+    font-family: var(--font-mono);
+    font-size: 1em;
+    text-align: left;
+    white-space: pre;
+    word-spacing: normal;
+    word-break: normal;
+    word-wrap: normal;
+    line-height: 1.5;
+    tab-size: 4;
+    hyphens: none;
+}
+
+pre[class*="language-"] {
+    padding: 1em;
+    margin: 0.5em 0;
+    overflow: auto;
+}
+
+:not(pre) > code[class*="language-"],
+pre[class*="language-"] {
+    background: var(--prism-background);
+}
+
+:not(pre) > code[class*="language-"] {
+    padding: 0.1em;
+    border-radius: 0.3em;
+    white-space: normal;
+}
+
+/* Comments */
+.token.comment,
+.token.block-comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+    color: var(--prism-comment);
+}
+
+/* Punctuation */
+.token.punctuation {
+    color: var(--prism-punctuation);
+}
+
+/* Tags, attributes, deleted */
+.token.tag,
+.token.attr-name,
+.token.namespace,
+.token.deleted {
+    color: var(--prism-tag);
+}
+
+/* Function names */
+.token.function-name,
+.token.function {
+    color: var(--prism-function);
+}
+
+/* Booleans */
+.token.boolean {
+    color: var(--prism-boolean);
+}
+
+/* Numbers */
+.token.number {
+    color: var(--prism-number);
+}
+
+/* Properties */
+.token.property {
+    color: var(--prism-property);
+}
+
+/* Classes, constants, symbols */
+.token.class-name,
+.token.constant,
+.token.symbol {
+    color: var(--prism-class);
+}
+
+/* Keywords, selectors, builtins */
+.token.selector,
+.token.important,
+.token.atrule,
+.token.keyword,
+.token.builtin {
+    color: var(--prism-keyword);
+}
+
+/* Strings, chars, attr values, regex */
+.token.string,
+.token.char,
+.token.attr-value,
+.token.regex {
+    color: var(--prism-string);
+}
+
+/* Variables */
+.token.variable {
+    color: var(--prism-variable);
+}
+
+/* Operators, entities, URLs */
+.token.operator,
+.token.entity,
+.token.url {
+    color: var(--prism-operator);
+}
+
+/* Inserted */
+.token.inserted {
+    color: var(--prism-inserted);
+}
+
+/* Formatting */
+.token.bold,
+.token.important {
+    font-weight: 700;
+}
+
+.token.italic {
+    font-style: italic;
+}
+
+.token.entity {
+    cursor: help;
+}
