@@ -7,4 +7,5 @@ public interface IBlogService
     Task<List<BlogPost>> GetAllPostsAsync();
     Task<BlogPost?> GetPostBySlugAsync(string slug);
     Task<List<BlogPost>> GetPostsByTagAsync(string tag);
+    void ClearCache();
 }
