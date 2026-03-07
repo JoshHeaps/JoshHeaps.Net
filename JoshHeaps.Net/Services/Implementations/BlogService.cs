@@ -84,5 +84,11 @@ public class BlogService : IBlogService
         return result;
     }
 
+    public void ClearCache()
+    {
+        _cache.Clear();
+        _logger.LogInformation("Blog cache cleared");
+    }
+
     private record CacheEntry(object Value, DateTime ExpiresAt);
 }
