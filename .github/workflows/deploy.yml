@@ -24,9 +24,9 @@ jobs:
         with:
           dotnet-version: '8.0.x'  # adjust if needed
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore JoshHeaps.Net/JoshHeaps.Net.csproj
       - name: Publish
-        run: dotnet publish -c Release -o ./publish
+        run: dotnet publish JoshHeaps.Net/JoshHeaps.Net.csproj -c Release -o ./publish
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

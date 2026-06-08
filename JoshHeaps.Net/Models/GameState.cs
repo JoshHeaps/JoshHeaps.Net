@@ -1,4 +1,4 @@
-﻿using JoshHeaps.Net.Services.Implementations;
+﻿using JoshHeaps.Net.Services.Interfaces;
 
 namespace JoshHeaps.Net.Models;
 
@@ -43,7 +43,7 @@ public class GameState
 
     public bool IsVsComputer { get; set; } = false;
 
-    public Stockfish? Computer { get; set; }
+    public IChessEngine? Computer { get; set; }
 
     // optional: convenience
     public bool IsOpen => !WhiteJoined || !BlackJoined;

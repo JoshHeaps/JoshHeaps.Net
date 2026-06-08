@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>53ed685c-bdff-4306-8cc2-9fbe55c85713</UserSecretsId>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,6 +27,18 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="8.0.7" />
+  </ItemGroup>
+
+  <!-- Builds the native engine and refreshes Resources\chess_engine.dll (via its post-build copy)
+       only inside Visual Studio, which has the C++ tools. The dotnet CLI can't build a .vcxproj,
+       so this is skipped by `dotnet build`/`dotnet publish` (incl. the Linux CI, which deploys the
+       libchess_engine.so instead). ReferenceOutputAssembly=false: build-ordering only, not a
+       managed reference to the native DLL. -->
+  <ItemGroup Condition="'$(BuildingInsideVisualStudio)' == 'true'">
+    <ProjectReference Include="..\native\chess_engine\chess_engine\chess_engine.vcxproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <Private>false</Private>
+    </ProjectReference>
   </ItemGroup>
 
 </Project>

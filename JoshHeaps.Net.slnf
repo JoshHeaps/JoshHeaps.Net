@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "JoshHeaps.Net.sln",
+    "projects": [
+      "JoshHeaps.Net\\JoshHeaps.Net.csproj",
+      "JoshHeaps.Net.UiTests\\JoshHeaps.Net.UiTests.csproj"
+    ]
+  }
+}
