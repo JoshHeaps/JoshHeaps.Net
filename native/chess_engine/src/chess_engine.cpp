@@ -18,6 +18,7 @@
 #include "movegen.h"
 #include "uci.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -57,8 +58,8 @@ static int parse_skill(const char* options, int fallback) {
     return v < 1 ? 1 : v > 20 ? 20 : v;
 }
 
-/* Maps the 1..20 difficulty to a search depth. Kept modest: the search has no move
- * ordering or quiescence yet, so deep fixed-depth runs get expensive quickly. */
+/* Maps the 1..20 difficulty to a search depth. Kept modest: the search has no
+ * quiescence yet, so deep fixed-depth runs get expensive quickly. */
 static int depth_for_skill(int skill) {
     return skill;    /* skill 1 -> 2 plies ... skill 20 -> 7 plies */
 }
@@ -178,6 +179,52 @@ static int evaluate(const chess::Position& pos) {
     return score;
 }
 
+static int piece_value(chess::PieceType pt) {
+    switch (pt) {
+        case chess::PAWN:   return 100;
+        case chess::KNIGHT: return 320;
+        case chess::BISHOP: return 330;
+        case chess::ROOK:   return 500;
+        case chess::QUEEN:  return 900;
+        default:            return 0;
+    }
+}
+
+/* Heuristic for searching the most promising moves first, which makes alpha-beta
+ * prune far more. Checks rank highest, then captures by MVV-LVA (grab the most
+ * valuable victim with the least valuable attacker). */
+static int order_score(chess::Position& pos, chess::Move m) {
+    int score = 0;
+
+    if (pos.gives_check(m))
+        score += 1000;
+
+    chess::Piece victim = pos.piece_on(m.to());
+    if (victim != chess::NO_PIECE)
+        score += 100 + 10 * piece_value(chess::type_of(victim))
+                     - piece_value(chess::type_of(pos.piece_on(m.from())));
+    else if (m.type() == chess::EN_PASSANT)
+        score += 100 + 10 * piece_value(chess::PAWN);
+
+    return score;
+}
+
+/* Sort the move list in place, best-scoring first. Scores are computed once up
+ * front so gives_check isn't re-evaluated on every comparison. */
+static void order_moves(chess::Position& pos, chess::MoveList& moves) {
+    struct ScoredMove { int score; chess::Move move; };
+    ScoredMove scored[256];
+
+    for (int i = 0; i < moves.size(); i++)
+        scored[i] = { order_score(pos, moves.moves[i]), moves.moves[i] };
+
+    std::sort(scored, scored + moves.size(),
+              [](const ScoredMove& a, const ScoredMove& b) { return a.score > b.score; });
+
+    for (int i = 0; i < moves.size(); i++)
+        moves.moves[i] = scored[i].move;
+}
+
 extern "C" {
 
 CHESS_API EngineHandle CHESS_CALL engine_create(const char* options) {
@@ -204,6 +251,8 @@ static int alpha_beta(chess::Position& pos, int depth, int maxDepth, int bestFor
 
     if (moves.size() == 0)
         return pos.is_draw() ? 0 : whiteToMove ? -200000 + depth : 200000 - depth;
+
+    order_moves(pos, moves);
 
     for (int i = 0; i < moves.size(); i++) {
 		chess::Move move = moves.moves[i];
@@ -246,6 +295,8 @@ CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
     pos.generate_legal(moves);
     if (moves.size() == 0)
         return CHESS_ERR_NO_MOVE;
+
+    order_moves(pos, moves);
 
     int maxDepth = depth_for_skill(engine->skill);
 
