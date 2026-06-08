@@ -35,6 +35,9 @@ public class ChessService : IChessService
         gameState.CurrentPlayer = PieceColor.White;
 
         UpdateCheckStatus(gameState);
+
+        gameState.PositionHistory.Clear();
+        gameState.PositionHistory.Add(PositionKey(gameState));
     }
 
     private static void SetupBlackPieces(GameState gs)
@@ -144,14 +147,31 @@ public class ChessService : IChessService
         var notation = $"{piece.Id}:{piece.Position}->{targetPos}";
         gameState.MoveHistory.Add(notation);
 
+        var positionKey = PositionKey(gameState);
+        gameState.PositionHistory.Add(positionKey);
+
+        if (gameState.PositionHistory.Count(k => k == positionKey) >= 3)
+            gameState.IsThreefoldRepetition = true;
+
         return new MoveResultDto
         {
             Success = true,
             Message = "Move successful.",
             IsCheck = gameState.IsCheck,
             IsCheckmate = gameState.IsCheckmate,
-            IsStalemate = gameState.IsStalemate
+            IsStalemate = gameState.IsStalemate,
+            IsThreefoldRepetition = gameState.IsThreefoldRepetition
         };
+    }
+
+    /// <summary>
+    /// The repetition signature of a position: the first four FEN fields — piece placement,
+    /// side to move, castling rights, and en-passant target. Move counters are excluded.
+    /// </summary>
+    private static string PositionKey(GameState gs)
+    {
+        var fields = gs.ToFen().Split(' ');
+        return string.Join(' ', fields.Take(4));
     }
 
     private static void PerformMove(GameState gs, ChessPiece piece, Position targetPos, MoveDto moveDto)

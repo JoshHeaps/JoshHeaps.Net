@@ -28,9 +28,17 @@ public class GameState
     public bool IsCheck { get; set; }
     public bool IsCheckmate { get; set; }
     public bool IsStalemate { get; set; }
+    public bool IsThreefoldRepetition { get; set; }
+    public bool IsForfeited { get; set; } = false;
+
+    // The color that won, when the game ended by forfeit (null while the game is live).
+    public PieceColor? Winner { get; set; }
 
     // Keep a history of moves if desired
     public List<string> MoveHistory { get; set; }
+
+    // Position keys (FEN placement/side/castling/en-passant) for threefold-repetition detection.
+    public List<string> PositionHistory { get; set; }
 
     // A list of all pieces to quickly reference them (optional but convenient).
     // Alternatively, you can iterate the Board array.
@@ -42,6 +50,7 @@ public class GameState
     public Guid BlackPlayerId { get; set; }
 
     public bool IsVsComputer { get; set; } = false;
+    public bool IsComputerVsComputer { get; set; } = false;
 
     public IChessEngine? Computer { get; set; }
 
@@ -54,5 +63,6 @@ public class GameState
         Board = new ChessPiece[8, 8];
         Pieces = [];
         MoveHistory = [];
+        PositionHistory = [];
     }
 }

@@ -7,4 +7,5 @@ public class MoveResultDto
     public bool IsCheck { get; set; }
     public bool IsCheckmate { get; set; }
     public bool IsStalemate { get; set; }
+    public bool IsThreefoldRepetition { get; set; }
 }

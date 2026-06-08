@@ -28,6 +28,17 @@
     margin: 2vh;
 }
 
+#watchLink {
+    color: #8cd5ed;
+    text-decoration: none;
+    margin: 2vh;
+    order: 2;
+}
+
+#watchLink:hover {
+    text-decoration: underline;
+}
+
 #chessContainer {
     display: flex;
     flex-direction: column;

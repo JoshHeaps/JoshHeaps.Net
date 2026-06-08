@@ -14,6 +14,14 @@ const ChessAPI = {
         return await response.json();
     },
 
+    async forfeit(gameId, playerId) {
+        await fetch("/api/chess/forfeit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ GameId: gameId, PlayerId: playerId })
+        });
+    },
+
     async getLegalMoves(pieceId) {
         const response = await fetch(`/api/chess/${GameState.currentGameId}/legalMoves/${pieceId}`);
         if (!response.ok) throw new Error("API failed");
@@ -100,6 +108,9 @@ const ChessAPI = {
                 gameOver = true;
             } else if (moveResult.isStalemate) {
                 alert("🤝 Stalemate!");
+                gameOver = true;
+            } else if (moveResult.isThreefoldRepetition) {
+                alert("🤝 Draw by threefold repetition!");
                 gameOver = true;
             }
 

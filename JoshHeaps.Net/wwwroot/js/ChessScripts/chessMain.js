@@ -1,5 +1,19 @@
+async function forfeitCurrentGame() {
+    const gameId = ChessUtils.getCookie("chessGameId");
+    const playerId = ChessUtils.getCookie("chessPlayerId");
+
+    if (!gameId || !playerId) return;
+
+    try {
+        await ChessAPI.forfeit(gameId, playerId);
+    } catch (err) {
+        console.warn("Could not forfeit previous game.", err);
+    }
+}
+
 async function startNewGame() {
     await ChessSignalR.stopConnection();
+    await forfeitCurrentGame();
 
     try {
         const gameData = await ChessAPI.joinGame();
@@ -25,6 +39,7 @@ async function startNewGame() {
 
 async function startCPUGame() {
     await ChessSignalR.stopConnection();
+    await forfeitCurrentGame();
 
     try {
         const difficulty = await ChessModals.promptDifficulty();
