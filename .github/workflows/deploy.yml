@@ -14,7 +14,9 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned (not ubuntu-latest) to match the prod server's Ubuntu/glibc so the
+    # compiled libchess_engine.so loads there. Keep this == the server's release.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,6 +27,13 @@ jobs:
           dotnet-version: '8.0.x'  # adjust if needed
       - name: Restore
         run: dotnet restore JoshHeaps.Net/JoshHeaps.Net.csproj
+
+      - name: Build native chess engine (libchess_engine.so)
+        run: |
+          cmake -S native/chess_engine -B native/chess_engine/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/chess_engine/build
+          cp native/chess_engine/build/libchess_engine.so JoshHeaps.Net/Resources/
+
       - name: Publish
         run: dotnet publish JoshHeaps.Net/JoshHeaps.Net.csproj -c Release -o ./publish
 
