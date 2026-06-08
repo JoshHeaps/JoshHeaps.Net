@@ -1,8 +1,6 @@
-﻿using JoshHeaps.Net.Hubs;
-using JoshHeaps.Net.Models;
+﻿using JoshHeaps.Net.Models;
 using JoshHeaps.Net.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
 namespace JoshHeaps.Net.Controllers;
@@ -11,8 +9,9 @@ namespace JoshHeaps.Net.Controllers;
 [Route("api/[controller]")]
 public class ChessController(
     IChessService chessService,
-    IHubContext<ChessHub> chessHub,
-    IBackgroundTaskQueue queue) : ControllerBase
+    IBackgroundTaskQueue queue,
+    IChessEngineFactory engineFactory,
+    IComputerMoveOrchestrator orchestrator) : ControllerBase
 {
     /// <summary>
     /// Store of ongoing games.
@@ -42,7 +41,7 @@ public class ChessController(
         Guid computerId = Guid.NewGuid();
         var isWhite = Random.Shared.Next(2) == 0;
 
-        gameState.Computer = new(difficulty);
+        gameState.Computer = engineFactory.Create(difficulty);
 
         if (isWhite)
         {
@@ -57,7 +56,7 @@ public class ChessController(
             {
                 // Give user's browser time to connect to signalR and such.
                 await Task.Delay(TimeSpan.FromSeconds(1));
-                await gameState.Computer.MakeMove(gameState, chessHub, chessService);
+                await orchestrator.PlayAsync(gameState, gameState.Computer!);
             });
         }
 
@@ -189,7 +188,7 @@ public class ChessController(
             ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
         if (gameState.IsVsComputer && gameState.Computer is not null)
-            queue.Queue(() => gameState.Computer.MakeMove(gameState, chessHub, chessService));
+            queue.Queue(() => orchestrator.PlayAsync(gameState, gameState.Computer!));
 
         return Ok(result);
     }

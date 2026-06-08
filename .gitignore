@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Native chess engine CMake build output (the compiled .dll/.so are committed under Resources/)
+native/**/build/

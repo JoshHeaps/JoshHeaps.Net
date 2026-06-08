@@ -22,6 +22,10 @@ builder.Services.AddSingleton<IBlogService, BlogService>();
 builder.Services.AddSingleton<IChessService, ChessService>();
 builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
 
+builder.Services.Configure<ChessEngineOptions>(configuration.GetSection(ChessEngineOptions.SectionName));
+builder.Services.AddSingleton<IChessEngineFactory, ChessEngineFactory>();
+builder.Services.AddSingleton<IComputerMoveOrchestrator, ComputerMoveOrchestrator>();
+
 if (!builder.Environment.IsDevelopment())
     builder.Services.AddHostedService<AutoIpUpdateService>();
 
