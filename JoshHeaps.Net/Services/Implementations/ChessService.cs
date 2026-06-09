@@ -28,6 +28,7 @@ public class ChessService : IChessService
         gameState.BlackCanCastleKingside = true;
         gameState.BlackCanCastleQueenside = true;
         gameState.EnPassantTarget = null;
+        gameState.HalfmoveClock = 0;
 
         SetupBlackPieces(gameState);
         SetupWhitePieces(gameState);
@@ -178,6 +179,7 @@ public class ChessService : IChessService
     {
         var oldPos = piece.Position;
         var captured = gs.Board[targetPos.Row, targetPos.Col];
+        var isPawnMove = piece.Type == PieceType.Pawn;   // captured before promotion can change Type
 
         HandleEnPassantIfNeeded(gs, piece, targetPos, ref captured);
 
@@ -198,6 +200,9 @@ public class ChessService : IChessService
         HandlePawnPromotionIfNeeded(piece, moveDto);
 
         UpdateCastlingRights(gs, piece, oldPos);
+
+        // Reset the 50-move clock on captures and pawn moves (irreversible); else advance it.
+        gs.HalfmoveClock = (isPawnMove || captured != null) ? 0 : gs.HalfmoveClock + 1;
 
         gs.CurrentPlayer = gs.CurrentPlayer == PieceColor.White
             ? PieceColor.Black

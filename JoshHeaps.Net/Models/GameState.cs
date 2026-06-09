@@ -40,6 +40,10 @@ public class GameState
     // Position keys (FEN placement/side/castling/en-passant) for threefold-repetition detection.
     public List<string> PositionHistory { get; set; }
 
+    // Half-moves since the last capture or pawn move (the FEN 50-move clock). Also tells
+    // us how many trailing PositionHistory entries belong to the current repetition window.
+    public int HalfmoveClock { get; set; }
+
     // A list of all pieces to quickly reference them (optional but convenient).
     // Alternatively, you can iterate the Board array.
     public List<ChessPiece> Pieces { get; set; }

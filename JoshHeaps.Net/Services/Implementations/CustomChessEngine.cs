@@ -28,9 +28,10 @@ public sealed partial class CustomChessEngine : IChessEngine
         _handle = new EngineSafeHandle(handle);
     }
 
-    public Task<string> GetBestMoveAsync(string fen) => Task.Run(() => GetBestMove(fen));
+    public Task<string> GetBestMoveAsync(string fen, IReadOnlyList<string> historyFens) =>
+        Task.Run(() => GetBestMove(fen, string.Join('\n', historyFens)));
 
-    private unsafe string GetBestMove(string fen)
+    private unsafe string GetBestMove(string fen, string history)
     {
         const int bufferLength = 16;            // longest UCI move is 5 chars ("e7e8q") + NUL
         byte* buffer = stackalloc byte[bufferLength];
@@ -40,7 +41,7 @@ public sealed partial class CustomChessEngine : IChessEngine
         try
         {
             _handle.DangerousAddRef(ref added);
-            var code = NativeMethods.engine_best_move(_handle.DangerousGetHandle(), fen, buffer, bufferLength);
+            var code = NativeMethods.engine_best_move(_handle.DangerousGetHandle(), fen, history, buffer, bufferLength);
 
             if (code != 0)
                 throw new InvalidOperationException($"Native chess engine failed to produce a move for FEN '{fen}' (engine_best_move returned {code}).");
@@ -109,7 +110,7 @@ public sealed partial class CustomChessEngine : IChessEngine
 
         [LibraryImport(LibName, StringMarshalling = StringMarshalling.Utf8)]
         [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
-        internal static unsafe partial int engine_best_move(IntPtr engine, string fen, byte* outBuffer, int outLength);
+        internal static unsafe partial int engine_best_move(IntPtr engine, string fen, string history, byte* outBuffer, int outLength);
 
         [LibraryImport(LibName)]
         [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
