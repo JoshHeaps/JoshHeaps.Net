@@ -316,6 +316,18 @@ bool Position::insufficient_material() const {
     return minors <= 1; // KvK, KvKN, KvKB
 }
 
+void Position::seed_history(const uint64_t* priorKeys, int count) {
+    if (count <= 0) return;
+    if (count > 1000) count = 1000;          // leave headroom in repKeys for search plies
+
+    uint64_t current = zkey;                  // from_fen placed this at repKeys[0]
+    for (int i = 0; i < count; ++i)
+        repKeys[i] = priorKeys[i];
+    repKeys[count] = current;
+    repCount = count + 1;
+    rule50   = count;                         // == half-moves since the last irreversible move
+}
+
 bool Position::is_draw() const {
     if (rule50 >= 100) return true;
     if (insufficient_material()) return true;

@@ -57,6 +57,10 @@ CHESS_API int CHESS_CALL engine_set_option(EngineHandle engine,
 /* Compute the best move for the given position.
  *   engine  : handle from engine_create.
  *   fen     : null-terminated UTF-8 FEN of the position to move from.
+ *   history : optional null-terminated UTF-8 list of the prior positions since the
+ *             last irreversible move (capture/pawn move), one FEN per line, oldest
+ *             first, NOT including `fen`. Lets the engine detect threefold/50-move
+ *             draws that the FEN alone can't carry. May be NULL or empty.
  *   out_buf : host-owned buffer the engine writes the UCI move into,
  *             as a null-terminated ASCII string (e.g. "e2e4\0").
  *   out_len : capacity of out_buf in bytes (host passes >= 8).
@@ -64,6 +68,7 @@ CHESS_API int CHESS_CALL engine_set_option(EngineHandle engine,
  * MUST NOT write more than out_len bytes including the NUL terminator. */
 CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
                                           const char* fen,
+                                          const char* history,
                                           char* out_buf,
                                           int   out_len);
 

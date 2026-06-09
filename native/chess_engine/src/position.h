@@ -47,6 +47,11 @@ public:
     void do_move(Move m);
     void undo_move(Move m);
 
+    // Seed prior-position keys (oldest first, excluding the current position) so
+    // is_draw() can see game history the FEN doesn't carry. Call once, right after
+    // from_fen and before any do_move.
+    void seed_history(const uint64_t* priorKeys, int count);
+
     // --- freebies ---
     uint64_t key()     const { return zkey; }
     bool     is_draw() const;                  // 50-move + threefold + insufficient material

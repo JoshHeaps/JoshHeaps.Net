@@ -19,15 +19,65 @@
 #include "uci.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <limits>
+#include <mutex>
 #include <new>
 #include <string>
 #include <memory>
+#include <vector>
 
 
-/* Internal engine state. Put your search tables, transposition table, etc. here. */
+/* Search score constants. Scores are side-to-move-relative (negamax): positive is
+ * good for whoever is to move. MATE_BOUND is the threshold above which a score is a
+ * "mate in N" rather than a positional eval; INF is the window sentinel (kept above
+ * MATE so negating it can never hit signed-overflow UB the way INT_MIN would). */
+static constexpr int MATE       = 200000;
+static constexpr int MATE_BOUND = MATE - 1000;
+static constexpr int INF        = 1000000;
+
+/* Bound kind stored in a TT entry. LOWER = a fail-high (true score >= stored),
+ * UPPER = a fail-low (true score <= stored), EXACT = fully resolved. */
+enum class Bound : uint8_t { NONE, EXACT, LOWER, UPPER };
+
+/* One shared, process-wide transposition table backs every game (every engine
+ * handle), so analysis persists and is reused across games. It is lock-free: each
+ * slot is two 64-bit words — `data` (the packed payload) and `xorKey` (the Zobrist
+ * key XOR-ed with `data`). A reader recovers the key as `xorKey ^ data`; if two
+ * concurrent searches tore the pair, the recovered key won't match and the read is
+ * treated as a miss — never a wrong-but-trusted entry (Hyatt's lockless hashing). */
+struct TTEntry {
+    std::atomic<uint64_t> xorKey{0};
+    std::atomic<uint64_t> data{0};
+};
+
+struct TranspositionTable {
+    std::unique_ptr<TTEntry[]> entries;
+    size_t mask = 0;                             /* count - 1; count is a power of two */
+};
+
+static TranspositionTable g_tt;
+static constexpr size_t   TT_MEGABYTES = 256;
+
+/* Pack/unpack the 64-bit payload: score(32) | move(16) | depth(8) | bound(8). A stored
+ * entry always has depth >= 1 and a non-NONE bound, so a real entry never packs to 0 —
+ * letting data == 0 mean "empty slot". */
+static uint64_t    tt_pack(int score, chess::Move move, int depth, Bound bound) {
+    return  static_cast<uint64_t>(static_cast<uint32_t>(score))
+         | (static_cast<uint64_t>(move.data)                  << 32)
+         | (static_cast<uint64_t>(static_cast<uint8_t>(depth)) << 48)
+         | (static_cast<uint64_t>(static_cast<uint8_t>(bound)) << 56);
+}
+static int         tt_score(uint64_t d) { return static_cast<int32_t>(static_cast<uint32_t>(d & 0xFFFFFFFFu)); }
+static chess::Move tt_move (uint64_t d) { return chess::Move(static_cast<uint16_t>(d >> 32)); }
+static int         tt_depth(uint64_t d) { return static_cast<int>(static_cast<uint8_t>(d >> 48)); }
+static Bound       tt_bound(uint64_t d) { return static_cast<Bound>(static_cast<uint8_t>(d >> 56)); }
+
+/* Internal engine state. One ChessEngine = one game. The table is NOT here: it is the
+ * shared g_tt above. */
 struct ChessEngine {
     int skill = 20;          /* 1..20 from the UI; controls search depth */
 };
@@ -61,7 +111,26 @@ static int parse_skill(const char* options, int fallback) {
 /* Maps the 1..20 difficulty to a search depth. Kept modest: the search has no
  * quiescence yet, so deep fixed-depth runs get expensive quickly. */
 static int depth_for_skill(int skill) {
-    return skill;    /* skill 1 -> 2 plies ... skill 20 -> 7 plies */
+    return skill;    /* skill N -> N plies */
+}
+
+static size_t floor_pow2(size_t n) {
+    size_t p = 1;
+    while ((p << 1) != 0 && (p << 1) <= n) p <<= 1;
+    return p;
+}
+
+/* Allocate the shared table exactly once, to the largest power-of-two entry count that
+ * fits in TT_MEGABYTES. Power-of-two count lets indexing use `key & mask`. Thread-safe:
+ * call_once guards the first concurrent engine_create. Entries start zeroed (empty). */
+static void ensure_tt() {
+    static std::once_flag once;
+    std::call_once(once, [] {
+        size_t count = floor_pow2((TT_MEGABYTES << 20) / sizeof(TTEntry));
+        if (count < 1) count = 1;
+        g_tt.entries = std::make_unique<TTEntry[]>(count);
+        g_tt.mask    = count - 1;
+    });
 }
 
 /* Positional multiplier in [0.5, 2.0] based on a square's distance from the four
@@ -179,6 +248,19 @@ static int evaluate(const chess::Position& pos) {
     return score;
 }
 
+/* evaluate() is white-positive (absolute). Negamax needs it relative to the side to
+ * move, so flip the sign when black is to move. */
+static int evaluate_stm(const chess::Position& pos, bool whiteToMove) {
+    int s = evaluate(pos);
+    return whiteToMove ? s : -s;
+}
+
+/* Mate scores are "mate in N from THIS node", so they must be re-anchored to the
+ * probing node's ply when crossing the TT (store adds ply, retrieve subtracts it).
+ * Non-mate scores pass through untouched. */
+static int score_to_tt(int s, int ply)   { return s >=  MATE_BOUND ? s + ply : s <= -MATE_BOUND ? s - ply : s; }
+static int score_from_tt(int s, int ply) { return s >=  MATE_BOUND ? s - ply : s <= -MATE_BOUND ? s + ply : s; }
+
 static int piece_value(chess::PieceType pt) {
     switch (pt) {
         case chess::PAWN:   return 100;
@@ -191,12 +273,16 @@ static int piece_value(chess::PieceType pt) {
 }
 
 /* Heuristic for searching the most promising moves first, which makes alpha-beta
- * prune far more. Checks rank highest, then captures by MVV-LVA (grab the most
- * valuable victim with the least valuable attacker). */
-static int order_score(chess::Position& pos, chess::Move m) {
+ * prune far more. The TT's best move (if any) goes first, then checks, then captures
+ * by MVV-LVA (grab the most valuable victim with the least valuable attacker).
+ * `scoreChecks` gates the expensive gives_check term to near-leaf nodes. */
+static int order_score(chess::Position& pos, chess::Move m, chess::Move ttMove, bool scoreChecks) {
+    if (m == ttMove)
+        return 2000000;                  /* dwarfs any capture/check score below */
+
     int score = 0;
 
-    if (pos.gives_check(m))
+    if (scoreChecks && pos.gives_check(m))
         score += 1000;
 
     chess::Piece victim = pos.piece_on(m.to());
@@ -210,13 +296,14 @@ static int order_score(chess::Position& pos, chess::Move m) {
 }
 
 /* Sort the move list in place, best-scoring first. Scores are computed once up
- * front so gives_check isn't re-evaluated on every comparison. */
-static void order_moves(chess::Position& pos, chess::MoveList& moves) {
+ * front so gives_check isn't re-evaluated on every comparison. ttMove may be
+ * MOVE_NONE, in which case no move matches it and ordering falls back to captures. */
+static void order_moves(chess::Position& pos, chess::MoveList& moves, chess::Move ttMove, bool scoreChecks) {
     struct ScoredMove { int score; chess::Move move; };
     ScoredMove scored[256];
 
     for (int i = 0; i < moves.size(); i++)
-        scored[i] = { order_score(pos, moves.moves[i]), moves.moves[i] };
+        scored[i] = { order_score(pos, moves.moves[i], ttMove, scoreChecks), moves.moves[i] };
 
     std::sort(scored, scored + moves.size(),
               [](const ScoredMove& a, const ScoredMove& b) { return a.score > b.score; });
@@ -229,6 +316,7 @@ extern "C" {
 
 CHESS_API EngineHandle CHESS_CALL engine_create(const char* options) {
     ensure_initialized();
+    ensure_tt();
     auto* e = new (std::nothrow) ChessEngine();
     if (!e) return nullptr;
     e->skill = parse_skill(options, e->skill);
@@ -242,47 +330,93 @@ CHESS_API int CHESS_CALL engine_set_option(EngineHandle engine,
     return CHESS_OK;                                      /* TODO: store options */
 }
 
-static int alpha_beta(chess::Position& pos, int depth, int maxDepth, int bestForWhite, int bestForBlack, bool whiteToMove) {
-	if (depth == maxDepth)
-		return evaluate(pos);
+/* Negamax alpha-beta over the shared transposition table. `maxDepth` is the searching
+ * bot's difficulty (its root depth); `depth` is remaining depth (draft); `ply` is
+ * distance from the root (mate scoring only). Scores are side-to-move-relative.
+ * Fail-soft: returns the true best found even outside [alpha, beta]. */
+static int negamax(chess::Position& pos, int maxDepth, int depth, int ply,
+                   int alpha, int beta, bool whiteToMove, uint64_t& nodes) {
+    nodes++;
 
-	chess::MoveList moves;
+    /* A draw is 0 even at the search horizon, and the TT key doesn't encode repetition
+     * history, so this must come before both the leaf eval and any TT probe. */
+    if (ply > 0 && pos.is_draw())
+        return 0;
+
+    if (depth <= 0)
+        return evaluate_stm(pos, whiteToMove);
+
+    const uint64_t key  = pos.key();
+    TTEntry&       slot = g_tt.entries[key & g_tt.mask];
+    const uint64_t data = slot.data.load(std::memory_order_relaxed);
+    const uint64_t xkey = slot.xorKey.load(std::memory_order_relaxed);
+
+    chess::Move ttMove = chess::MOVE_NONE;
+
+    if (data != 0 && (xkey ^ data) == key) {          /* lockless: XOR check rejects torn reads */
+        ttMove = tt_move(data);                       /* always reusable for ordering */
+        int   edepth = tt_depth(data);
+        Bound b      = tt_bound(data);
+
+        /* Trust the score only if it was searched deep enough for this node AND no deeper
+         * than this bot's own strength — so a weak bot can't borrow a stronger game's
+         * deeper analysis (it still gets the move for ordering, which can't leak strength). */
+        if (edepth >= depth && edepth <= maxDepth) {
+            int s = score_from_tt(tt_score(data), ply);
+            if (b == Bound::EXACT)               return s;
+            if (b == Bound::LOWER && s >= beta)  return s;
+            if (b == Bound::UPPER && s <= alpha) return s;
+        }
+    }
+
+    chess::MoveList moves;
     pos.generate_legal(moves);
 
     if (moves.size() == 0)
-        return pos.is_draw() ? 0 : whiteToMove ? -200000 + depth : 200000 - depth;
+        return pos.is_draw() ? 0 : -MATE + ply;       /* checkmate against side to move */
 
-    order_moves(pos, moves);
+    order_moves(pos, moves, ttMove, depth <= 2);
+
+    const int alphaOrig = alpha;
+    int best = -INF;
+    chess::Move bestMove = chess::MOVE_NONE;
 
     for (int i = 0; i < moves.size(); i++) {
-		chess::Move move = moves.moves[i];
-		pos.do_move(move);
-		int moveScore = alpha_beta(pos, depth + 1, maxDepth, bestForWhite, bestForBlack, !whiteToMove);
-        if (whiteToMove) {
-            if (moveScore >= bestForBlack) {
-				pos.undo_move(move);
-                return bestForBlack;
-            }
-            if (moveScore > bestForWhite)
-				bestForWhite = moveScore;
-        }
-        else {
-            if (moveScore <= bestForWhite) {
-				pos.undo_move(move);
-                return bestForWhite;
-            }
-            if (moveScore < bestForBlack)
-				bestForBlack = moveScore;
-        }
-
+        chess::Move move = moves.moves[i];
+        pos.do_move(move);
+        int score = -negamax(pos, maxDepth, depth - 1, ply + 1, -beta, -alpha, !whiteToMove, nodes);
         pos.undo_move(move);
+
+        if (score > best) {
+            best = score;
+            bestMove = move;
+        }
+        if (best > alpha)
+            alpha = best;
+        if (best >= beta)
+            break;                                    /* fail-high cutoff */
     }
 
-	return whiteToMove ? bestForWhite : bestForBlack;
+    Bound flag = best <= alphaOrig ? Bound::UPPER
+               : best >= beta      ? Bound::LOWER
+               :                     Bound::EXACT;
+
+    /* Depth-preferred replacement: keep the deepest analysis of each slot. The stored
+     * payload is written before the xorKey so any concurrent reader that catches a
+     * half-update fails the XOR check and treats it as a miss. */
+    int storedDepth = (data == 0) ? -1 : tt_depth(data);
+    if (depth >= storedDepth) {
+        uint64_t packed = tt_pack(score_to_tt(best, ply), bestMove, depth, flag);
+        slot.data.store(packed, std::memory_order_relaxed);
+        slot.xorKey.store(key ^ packed, std::memory_order_relaxed);
+    }
+
+    return best;
 }
 
 CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
                                           const char* fen,
+                                          const char* history,
                                           char* out_buf,
                                           int   out_len) {
     if (!engine)       return CHESS_ERR_NULL_HANDLE;
@@ -291,33 +425,62 @@ CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
     auto held = std::make_unique<chess::Position>(chess::Position::from_fen(fen));
     chess::Position& pos = *held;
     bool whiteToMove = pos.side_to_move() == chess::WHITE;
+
+    /* Seed the prior positions (one FEN per line) so is_draw() sees repetitions and
+     * the 50-move count that the current FEN alone can't express. */
+    if (history && *history) {
+        std::vector<uint64_t> priorKeys;
+        const char* p = history;
+        while (*p) {
+            const char* nl = std::strchr(p, '\n');
+            size_t len = nl ? static_cast<size_t>(nl - p) : std::strlen(p);
+            if (len > 0)
+                priorKeys.push_back(chess::Position::from_fen(std::string(p, len)).key());
+            if (!nl) break;
+            p = nl + 1;
+        }
+        if (!priorKeys.empty())
+            pos.seed_history(priorKeys.data(), static_cast<int>(priorKeys.size()));
+    }
+
     chess::MoveList moves;
     pos.generate_legal(moves);
     if (moves.size() == 0)
         return CHESS_ERR_NO_MOVE;
 
-    order_moves(pos, moves);
-
+    uint64_t nodes = 0;
     int maxDepth = depth_for_skill(engine->skill);
+    chess::Move bestMove = moves.moves[0];            /* guaranteed-legal fallback */
 
-	int bestForWhite = std::numeric_limits<int>::min();
-	int bestForBlack = std::numeric_limits<int>::max();
-	chess::Move bestMove = moves.moves[0];
+    /* Iterative deepening: each depth seeds the next depth's move ordering (via the
+     * previous best move and the TT it filled), which makes the deeper search prune
+     * far harder than searching to maxDepth cold. */
+    for (int d = 1; d <= maxDepth; d++) {
+        int alpha = -INF, beta = INF;
+        chess::Move iterBest = bestMove;
+        int iterScore = -INF;
 
-    for (int i = 0; i < moves.size(); i++) {
-		chess::Move move = moves.moves[i];
-		pos.do_move(move);
-        int score = alpha_beta(pos, 1, maxDepth, bestForWhite, bestForBlack, !whiteToMove);
-        pos.undo_move(move);
+        order_moves(pos, moves, iterBest, true);
 
-        if (whiteToMove && score > bestForWhite) {
-			bestForWhite = score;
-            bestMove = move;
+        for (int i = 0; i < moves.size(); i++) {
+            chess::Move move = moves.moves[i];
+            pos.do_move(move);
+            int score = -negamax(pos, maxDepth, d - 1, 1, -beta, -alpha, !whiteToMove, nodes);
+            pos.undo_move(move);
+
+            if (score > iterScore) {
+                iterScore = score;
+                iterBest = move;
+            }
+            if (score > alpha)
+                alpha = score;
         }
-        else if (!whiteToMove && score < bestForBlack) {
-			bestForBlack = score;
-            bestMove = move;
-        }
+
+        bestMove = iterBest;                          /* commit only a fully completed iteration */
+
+        std::fprintf(stderr, "depth %d nodes %llu best %s score %d\n",
+                     d, static_cast<unsigned long long>(nodes),
+                     chess::move_to_uci(iterBest).c_str(), iterScore);
     }
 
     return copy_out(chess::move_to_uci(bestMove).c_str(), out_buf, out_len);
