@@ -74,8 +74,9 @@ public sealed class Stockfish : IChessEngine
         WaitFor("readyok").GetAwaiter().GetResult();
     }
 
-    public async Task<string> GetBestMoveAsync(string fen)
+    public async Task<string> GetBestMoveAsync(string fen, IReadOnlyList<string> historyFens)
     {
+        // historyFens is unused: Stockfish tracks repetition from the position it's given.
         Send($"position fen {fen}");
         Send($"go depth {_skill}");
         string? best = null;

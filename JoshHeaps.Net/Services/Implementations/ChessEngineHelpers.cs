@@ -85,9 +85,32 @@ public static class ChessEngineHelpers
 
         /* 5-6) half-move clock + full-move number  */
         int fullMoves = gs.MoveHistory.Count / 2 + 1;
-        sb.Append(" 0 ").Append(fullMoves);
+        sb.Append(' ').Append(gs.HalfmoveClock).Append(' ').Append(fullMoves);
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// The prior positions since the last irreversible move (capture/pawn move), as
+    /// completed FEN strings, oldest first and excluding the current position. This is
+    /// the repetition window the engine needs to detect threefold/50-move draws that a
+    /// single FEN can't express.
+    /// </summary>
+    public static IReadOnlyList<string> RepetitionHistory(this GameState gs)
+    {
+        int clock = gs.HalfmoveClock;
+        int count = gs.PositionHistory.Count;
+        int start = count - 1 - clock;        // PositionHistory ends with the current position
+
+        if (clock <= 0 || start < 0)
+            return Array.Empty<string>();
+
+        var fens = new List<string>(clock);
+
+        for (int i = start; i < count - 1; i++)
+            fens.Add(gs.PositionHistory[i] + " 0 1");   // complete the 4-field key into a parseable FEN
+
+        return fens;
     }
 
     /* ---------- helpers ---------- */

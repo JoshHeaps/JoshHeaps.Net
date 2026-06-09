@@ -22,12 +22,14 @@ public class ChessService : IChessService
 
         gameState.Pieces.Clear();
         gameState.MoveHistory.Clear();
+        gameState.SanHistory.Clear();
 
         gameState.WhiteCanCastleKingside = true;
         gameState.WhiteCanCastleQueenside = true;
         gameState.BlackCanCastleKingside = true;
         gameState.BlackCanCastleQueenside = true;
         gameState.EnPassantTarget = null;
+        gameState.HalfmoveClock = 0;
 
         SetupBlackPieces(gameState);
         SetupWhitePieces(gameState);
@@ -35,6 +37,9 @@ public class ChessService : IChessService
         gameState.CurrentPlayer = PieceColor.White;
 
         UpdateCheckStatus(gameState);
+
+        gameState.PositionHistory.Clear();
+        gameState.PositionHistory.Add(PositionKey(gameState));
     }
 
     private static void SetupBlackPieces(GameState gs)
@@ -137,12 +142,23 @@ public class ChessService : IChessService
         if (!legalMoves.Any(m => m.Row == moveDto.TargetRow && m.Col == moveDto.TargetCol))
             return new MoveResultDto { Success = false, Message = "Illegal move." };
 
+        // SAN is built before the move (needs the pre-move board for captures/disambiguation);
+        // the check/mate suffix is appended after UpdateCheckStatus.
+        var sanBase = BuildSan(gameState, piece, targetPos, moveDto);
+
         PerformMove(gameState, piece, targetPos, moveDto);
 
         UpdateCheckStatus(gameState);
 
         var notation = $"{piece.Id}:{piece.Position}->{targetPos}";
         gameState.MoveHistory.Add(notation);
+        gameState.SanHistory.Add(sanBase + (gameState.IsCheckmate ? "#" : gameState.IsCheck ? "+" : ""));
+
+        var positionKey = PositionKey(gameState);
+        gameState.PositionHistory.Add(positionKey);
+
+        if (gameState.PositionHistory.Count(k => k == positionKey) >= 3)
+            gameState.IsThreefoldRepetition = true;
 
         return new MoveResultDto
         {
@@ -150,14 +166,95 @@ public class ChessService : IChessService
             Message = "Move successful.",
             IsCheck = gameState.IsCheck,
             IsCheckmate = gameState.IsCheckmate,
-            IsStalemate = gameState.IsStalemate
+            IsStalemate = gameState.IsStalemate,
+            IsThreefoldRepetition = gameState.IsThreefoldRepetition
         };
+    }
+
+    /// <summary>
+    /// Build the standard-algebraic notation for a move from the position BEFORE it is
+    /// applied (the check/mate suffix is added by the caller afterward).
+    /// </summary>
+    private string BuildSan(GameState gs, ChessPiece piece, Position target, MoveDto moveDto)
+    {
+        var from = piece.Position;
+
+        if (piece.Type == PieceType.King && Math.Abs(target.Col - from.Col) == 2)
+            return target.Col > from.Col ? "O-O" : "O-O-O";
+
+        bool targetOccupied = gs.Board[target.Row, target.Col] != null;
+        bool isEnPassant = piece.Type == PieceType.Pawn && from.Col != target.Col && !targetOccupied;
+        bool isCapture = targetOccupied || isEnPassant;
+        string dest = SquareName(target);
+
+        if (piece.Type == PieceType.Pawn)
+        {
+            var san = isCapture ? $"{FileChar(from.Col)}x{dest}" : dest;
+
+            bool promotes = (piece.Color == PieceColor.White && target.Row == 0)
+                         || (piece.Color == PieceColor.Black && target.Row == 7);
+
+            if (promotes)
+                san += "=" + PieceLetter(moveDto.PromotionChoice ?? PieceType.Queen);
+
+            return san;
+        }
+
+        return $"{PieceLetter(piece.Type)}{Disambiguation(gs, piece, target)}{(isCapture ? "x" : "")}{dest}";
+    }
+
+    /// <summary>
+    /// SAN disambiguation: when another piece of the same type and color can also reach the
+    /// target, qualify the origin by file, else rank, else both.
+    /// </summary>
+    private string Disambiguation(GameState gs, ChessPiece piece, Position target)
+    {
+        var rivals = gs.Pieces
+            .Where(p => p.Id != piece.Id && p.Type == piece.Type && p.Color == piece.Color && p.Position.Row >= 0)
+            .Where(p => GetLegalMovesForPiece(gs, p.Id).Any(m => m.Row == target.Row && m.Col == target.Col))
+            .ToList();
+
+        if (rivals.Count == 0)
+            return "";
+
+        if (rivals.All(p => p.Position.Col != piece.Position.Col))
+            return FileChar(piece.Position.Col).ToString();
+
+        if (rivals.All(p => p.Position.Row != piece.Position.Row))
+            return (8 - piece.Position.Row).ToString();
+
+        return $"{FileChar(piece.Position.Col)}{8 - piece.Position.Row}";
+    }
+
+    private static char FileChar(int col) => (char)('a' + col);
+
+    private static string SquareName(Position p) => $"{FileChar(p.Col)}{8 - p.Row}";
+
+    private static string PieceLetter(PieceType type) => type switch
+    {
+        PieceType.Knight => "N",
+        PieceType.Bishop => "B",
+        PieceType.Rook   => "R",
+        PieceType.Queen  => "Q",
+        PieceType.King   => "K",
+        _                => ""
+    };
+
+    /// <summary>
+    /// The repetition signature of a position: the first four FEN fields — piece placement,
+    /// side to move, castling rights, and en-passant target. Move counters are excluded.
+    /// </summary>
+    private static string PositionKey(GameState gs)
+    {
+        var fields = gs.ToFen().Split(' ');
+        return string.Join(' ', fields.Take(4));
     }
 
     private static void PerformMove(GameState gs, ChessPiece piece, Position targetPos, MoveDto moveDto)
     {
         var oldPos = piece.Position;
         var captured = gs.Board[targetPos.Row, targetPos.Col];
+        var isPawnMove = piece.Type == PieceType.Pawn;   // captured before promotion can change Type
 
         HandleEnPassantIfNeeded(gs, piece, targetPos, ref captured);
 
@@ -178,6 +275,9 @@ public class ChessService : IChessService
         HandlePawnPromotionIfNeeded(piece, moveDto);
 
         UpdateCastlingRights(gs, piece, oldPos);
+
+        // Reset the 50-move clock on captures and pawn moves (irreversible); else advance it.
+        gs.HalfmoveClock = (isPawnMove || captured != null) ? 0 : gs.HalfmoveClock + 1;
 
         gs.CurrentPlayer = gs.CurrentPlayer == PieceColor.White
             ? PieceColor.Black

@@ -28,6 +28,28 @@
     margin: 2vh;
 }
 
+#copyPgnBtn {
+    background-color: #8cd5ed;
+    color: #262626;
+    border-radius: 30px;
+    border: 0px;
+    cursor: pointer;
+    order: 1;
+    padding: 2vh;
+    margin: 2vh;
+}
+
+#watchLink {
+    color: #8cd5ed;
+    text-decoration: none;
+    margin: 2vh;
+    order: 2;
+}
+
+#watchLink:hover {
+    text-decoration: underline;
+}
+
 #chessContainer {
     display: flex;
     flex-direction: column;

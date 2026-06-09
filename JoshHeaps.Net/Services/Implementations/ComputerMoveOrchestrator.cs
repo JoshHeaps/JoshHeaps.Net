@@ -15,7 +15,7 @@ public sealed class ComputerMoveOrchestrator(
 {
     public async Task<(MoveDto move, MoveResultDto result)> PlayAsync(GameState state, IChessEngine engine)
     {
-        var uci = await engine.GetBestMoveAsync(state.ToFen());
+        var uci = await engine.GetBestMoveAsync(state.ToFen(), state.RepetitionHistory());
 
         var move = uci.ToMoveDto(
             state,

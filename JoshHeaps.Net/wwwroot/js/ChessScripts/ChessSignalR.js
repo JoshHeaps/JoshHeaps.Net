@@ -15,6 +15,10 @@ const ChessSignalR = {
             await this.handleMoveUpdate(gameId, moveDto, moveResultDto);
         });
 
+        this.connection.on("ReceiveGameOver", async (gameId, winner, reason) => {
+            await this.handleGameOver(gameId, winner, reason);
+        });
+
         try {
             await this.connection.start();
             console.log("✅ SignalR connected");
@@ -32,6 +36,18 @@ const ChessSignalR = {
         ChessBoard.renderPieces(gameState.pieces);
 
         ChessAPI.alertGameStatusChange(moveResultDto);
+    },
+
+    async handleGameOver(gameId, winner, reason) {
+        if (gameId !== GameState.currentGameId) return;
+
+        const youWon = (winner === "White") === GameState.currentPlayerIsWhite;
+
+        if (reason === "forfeit")
+            alert(youWon ? "🏳️ Your opponent forfeited — you win!" : "🏳️ You forfeited this game.");
+
+        showCopyPgn(gameId);
+        await this.leaveGame();
     },
 
     async notifyMoveMade(moveDto, moveResult) {

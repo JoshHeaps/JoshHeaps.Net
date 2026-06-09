@@ -1,6 +1,9 @@
-﻿using JoshHeaps.Net.Models;
+﻿using JoshHeaps.Net.Hubs;
+using JoshHeaps.Net.Models;
+using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
 namespace JoshHeaps.Net.Controllers;
@@ -11,7 +14,8 @@ public class ChessController(
     IChessService chessService,
     IBackgroundTaskQueue queue,
     IChessEngineFactory engineFactory,
-    IComputerMoveOrchestrator orchestrator) : ControllerBase
+    IComputerMoveOrchestrator orchestrator,
+    IHubContext<ChessHub> chessHub) : ControllerBase
 {
     /// <summary>
     /// Store of ongoing games.
@@ -23,6 +27,8 @@ public class ChessController(
     private static readonly TimeSpan _computerGameTimeout = TimeSpan.FromHours(1);
     private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromDays(1);
     private static readonly TimeSpan _gameCleanupTimeout = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan _selfPlayMoveDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan _selfPlayResultTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Create a new chess game and store it in-memory.
@@ -71,6 +77,31 @@ public class ChessController(
     }
 
     /// <summary>
+    /// Create a game the computer plays against itself and auto-play it move by move,
+    /// broadcasting each move so it can be watched on the spectator page.
+    /// </summary>
+    [HttpGet("watch/cpu")]
+    [HttpGet("watch/cpu/{difficulty}")]
+    public ActionResult CreateSelfPlayGame(int difficulty = 4)
+    {
+        var gameState = chessService.CreateNewGame();
+        _games[gameState.GameId] = gameState;
+
+        gameState.IsVsComputer = true;
+        gameState.IsComputerVsComputer = true;
+        gameState.WhiteJoined = true;
+        gameState.BlackJoined = true;
+        gameState.WhitePlayerId = Guid.NewGuid();
+        gameState.BlackPlayerId = Guid.NewGuid();
+        gameState.Computer = engineFactory.Create(difficulty);
+
+        ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
+        StartSelfPlay(gameState);
+
+        return Ok(new { gameState.GameId });
+    }
+
+    /// <summary>
     /// Joins the "pool" of chess players.
     /// Test code expects to receive a GUID for the player
     /// and a bool indicating if they are White.
@@ -113,6 +144,30 @@ public class ChessController(
     }
 
     /// <summary>
+    /// List in-progress games for spectators: both sides present and the game not yet decided.
+    /// </summary>
+    [HttpGet("active")]
+    public ActionResult GetActiveGames()
+    {
+        var activeGames = _games.Values
+            // In-progress games, plus finished computer-vs-computer games still in their result window.
+            .Where(g => g.WhiteJoined && g.BlackJoined
+                && ((!g.IsCheckmate && !g.IsStalemate && !g.IsForfeited && !g.IsThreefoldRepetition) || g.IsComputerVsComputer))
+            .Select(g => new
+            {
+                g.GameId,
+                g.IsVsComputer,
+                g.IsComputerVsComputer,
+                CurrentPlayer = g.CurrentPlayer.ToString(),
+                MoveCount = g.MoveHistory.Count,
+                g.IsCheck
+            })
+            .OrderByDescending(g => g.MoveCount);
+
+        return Ok(activeGames);
+    }
+
+    /// <summary>
     /// Get the state of an existing game by ID.
     /// </summary>
     [HttpGet("{gameId}")]
@@ -128,6 +183,7 @@ public class ChessController(
             gameState.IsCheck,
             gameState.IsCheckmate,
             gameState.IsStalemate,
+            gameState.IsThreefoldRepetition,
             EnPassantTarget = gameState.EnPassantTarget?.ToString() ?? null,
             gameState.WhiteCanCastleKingside,
             gameState.WhiteCanCastleQueenside,
@@ -180,17 +236,61 @@ public class ChessController(
         if (!result.Success)
             return BadRequest(result);
 
-        if (result.IsCheckmate || result.IsStalemate)
+        var isGameOver = result.IsCheckmate || result.IsStalemate || result.IsThreefoldRepetition;
+
+        if (isGameOver)
             ScheduleRemoveGame(gameState.GameId, _gameCleanupTimeout);
         else if (gameState.IsVsComputer)
             ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
         else
             ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
-        if (gameState.IsVsComputer && gameState.Computer is not null)
+        if (!isGameOver && gameState.IsVsComputer && gameState.Computer is not null)
             queue.Queue(() => orchestrator.PlayAsync(gameState, gameState.Computer!));
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Forfeit a game on behalf of the calling player, handing the win to the opponent.
+    /// Used when a player abandons a game (e.g. starts a new one mid-game).
+    /// </summary>
+    [HttpPost("forfeit")]
+    public async Task<ActionResult> Forfeit([FromBody] ForfeitDto forfeit)
+    {
+        if (!_games.TryGetValue(forfeit.GameId, out var gameState))
+            return NotFound("Game not found");
+
+        if (gameState.IsCheckmate || gameState.IsStalemate || gameState.IsForfeited)
+            return Ok();
+
+        var isWhitePlayer = gameState.WhitePlayerId == forfeit.PlayerId;
+        var isBlackPlayer = gameState.BlackPlayerId == forfeit.PlayerId;
+
+        if (!isWhitePlayer && !isBlackPlayer)
+            return StatusCode(403, "You are not a player in this game.");
+
+        gameState.IsForfeited = true;
+        gameState.Winner = isWhitePlayer ? PieceColor.Black : PieceColor.White;
+
+        await chessHub.Clients.Group(gameState.GameId.ToString())
+            .SendAsync("ReceiveGameOver", gameState.GameId.ToString(), gameState.Winner.ToString(), "forfeit");
+
+        ScheduleRemoveGame(gameState.GameId, _gameCleanupTimeout);
+
+        return Ok();
+    }
+
+    /// <summary>
+    /// Export a game as PGN (works while the game is still in memory after it ends).
+    /// </summary>
+    [HttpGet("{gameId}/pgn")]
+    public ActionResult GetPgn(Guid gameId)
+    {
+        if (!_games.TryGetValue(gameId, out var gameState))
+            return NotFound("Game not found");
+
+        return Content(gameState.ToPgn(), "application/x-chess-pgn");
     }
 
     /// <summary>
@@ -224,6 +324,42 @@ public class ChessController(
             });
 
         return Ok(allMoves);
+    }
+
+    /// <summary>
+    /// Drives a computer-vs-computer game: keeps asking the engine for the side-to-move's
+    /// move (which applies and broadcasts it) until the game ends or is removed.
+    /// </summary>
+    private void StartSelfPlay(GameState gameState)
+    {
+        queue.Queue(async () =>
+        {
+            // Give spectators a moment to join the SignalR group before the first move.
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            while (_games.ContainsKey(gameState.GameId)
+                && !gameState.IsCheckmate
+                && !gameState.IsStalemate
+                && !gameState.IsThreefoldRepetition
+                && !gameState.IsForfeited)
+            {
+                try
+                {
+                    await orchestrator.PlayAsync(gameState, gameState.Computer!);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Self-play game {gameState.GameId} stopped: {ex.Message}");
+                    break;
+                }
+
+                await Task.Delay(_selfPlayMoveDelay);
+            }
+
+            // Leave the finished game in place briefly so spectators can see the result.
+            if (_games.ContainsKey(gameState.GameId))
+                ScheduleRemoveGame(gameState.GameId, _selfPlayResultTimeout);
+        });
     }
 
     private static void ScheduleRemoveGame(Guid id, TimeSpan delay)

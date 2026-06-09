@@ -14,6 +14,20 @@ const ChessAPI = {
         return await response.json();
     },
 
+    async getPgn(gameId) {
+        const response = await fetch(`/api/chess/${gameId}/pgn`);
+        if (!response.ok) throw new Error("PGN unavailable");
+        return await response.text();
+    },
+
+    async forfeit(gameId, playerId) {
+        await fetch("/api/chess/forfeit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ GameId: gameId, PlayerId: playerId })
+        });
+    },
+
     async getLegalMoves(pieceId) {
         const response = await fetch(`/api/chess/${GameState.currentGameId}/legalMoves/${pieceId}`);
         if (!response.ok) throw new Error("API failed");
@@ -101,9 +115,13 @@ const ChessAPI = {
             } else if (moveResult.isStalemate) {
                 alert("🤝 Stalemate!");
                 gameOver = true;
+            } else if (moveResult.isThreefoldRepetition) {
+                alert("🤝 Draw by threefold repetition!");
+                gameOver = true;
             }
 
             if (gameOver) {
+                showCopyPgn(GameState.currentGameId);
                 await ChessSignalR.leaveGame();
             }
         }, 500);
