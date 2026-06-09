@@ -46,6 +46,7 @@ const ChessSignalR = {
         if (reason === "forfeit")
             alert(youWon ? "🏳️ Your opponent forfeited — you win!" : "🏳️ You forfeited this game.");
 
+        showCopyPgn(gameId);
         await this.leaveGame();
     },
 

@@ -1,6 +1,7 @@
 const Spectate = {
     connection: null,
     games: new Map(),   // gameId -> { isVsComputer, isComputerVsComputer, result }
+    pgns: new Map(),    // gameId -> PGN text (prefetched when a game finishes)
 
     pieceTypeNames: ["Pawn", "Rook", "Knight", "Bishop", "Queen", "King"],
 
@@ -106,6 +107,7 @@ const Spectate = {
 
     async removeGame(gameId) {
         this.games.delete(gameId);
+        this.pgns.delete(gameId);
         document.getElementById(`card-${gameId}`)?.remove();
         await this.connection.invoke("LeaveWebsocketGroup", gameId).catch(() => { });
     },
@@ -207,6 +209,7 @@ const Spectate = {
 
         if (!text) {
             banner?.remove();
+            card.querySelector(".copyPgnBtn")?.remove();
             card.classList.remove("over");
             return;
         }
@@ -219,6 +222,47 @@ const Spectate = {
 
         banner.textContent = text;
         card.classList.add("over");
+        this.addCopyPgn(gameId, card);
+    },
+
+    addCopyPgn(gameId, card) {
+        if (card.querySelector(".copyPgnBtn")) return;
+
+        const btn = document.createElement("button");
+        btn.className = "copyPgnBtn";
+        btn.textContent = "Copy PGN";
+        btn.onclick = (event) => { event.stopPropagation(); this.copyPgn(gameId); };
+        card.appendChild(btn);
+
+        // Prefetch now (while the game is still in memory) so copy works during the
+        // brief window before the finished game is cleaned up.
+        fetch(`/api/chess/${gameId}/pgn`)
+            .then(r => r.ok ? r.text() : null)
+            .then(t => { if (t) this.pgns.set(gameId, t); })
+            .catch(() => { });
+    },
+
+    async copyPgn(gameId) {
+        let pgn = this.pgns.get(gameId);
+
+        if (!pgn) {
+            try {
+                const r = await fetch(`/api/chess/${gameId}/pgn`);
+                if (r.ok) pgn = await r.text();
+            } catch { /* ignore */ }
+        }
+
+        if (!pgn) {
+            alert("PGN is no longer available for this game.");
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(pgn);
+            alert("📋 PGN copied to clipboard!");
+        } catch {
+            alert("Couldn't access the clipboard. Here's the PGN:\n\n" + pgn);
+        }
     },
 
     enterFullscreen(gameId) {

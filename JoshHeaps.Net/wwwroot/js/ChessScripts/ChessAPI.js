@@ -14,6 +14,12 @@ const ChessAPI = {
         return await response.json();
     },
 
+    async getPgn(gameId) {
+        const response = await fetch(`/api/chess/${gameId}/pgn`);
+        if (!response.ok) throw new Error("PGN unavailable");
+        return await response.text();
+    },
+
     async forfeit(gameId, playerId) {
         await fetch("/api/chess/forfeit", {
             method: "POST",
@@ -115,6 +121,7 @@ const ChessAPI = {
             }
 
             if (gameOver) {
+                showCopyPgn(GameState.currentGameId);
                 await ChessSignalR.leaveGame();
             }
         }, 500);

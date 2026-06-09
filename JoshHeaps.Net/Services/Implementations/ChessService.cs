@@ -22,6 +22,7 @@ public class ChessService : IChessService
 
         gameState.Pieces.Clear();
         gameState.MoveHistory.Clear();
+        gameState.SanHistory.Clear();
 
         gameState.WhiteCanCastleKingside = true;
         gameState.WhiteCanCastleQueenside = true;
@@ -141,12 +142,17 @@ public class ChessService : IChessService
         if (!legalMoves.Any(m => m.Row == moveDto.TargetRow && m.Col == moveDto.TargetCol))
             return new MoveResultDto { Success = false, Message = "Illegal move." };
 
+        // SAN is built before the move (needs the pre-move board for captures/disambiguation);
+        // the check/mate suffix is appended after UpdateCheckStatus.
+        var sanBase = BuildSan(gameState, piece, targetPos, moveDto);
+
         PerformMove(gameState, piece, targetPos, moveDto);
 
         UpdateCheckStatus(gameState);
 
         var notation = $"{piece.Id}:{piece.Position}->{targetPos}";
         gameState.MoveHistory.Add(notation);
+        gameState.SanHistory.Add(sanBase + (gameState.IsCheckmate ? "#" : gameState.IsCheck ? "+" : ""));
 
         var positionKey = PositionKey(gameState);
         gameState.PositionHistory.Add(positionKey);
@@ -164,6 +170,75 @@ public class ChessService : IChessService
             IsThreefoldRepetition = gameState.IsThreefoldRepetition
         };
     }
+
+    /// <summary>
+    /// Build the standard-algebraic notation for a move from the position BEFORE it is
+    /// applied (the check/mate suffix is added by the caller afterward).
+    /// </summary>
+    private string BuildSan(GameState gs, ChessPiece piece, Position target, MoveDto moveDto)
+    {
+        var from = piece.Position;
+
+        if (piece.Type == PieceType.King && Math.Abs(target.Col - from.Col) == 2)
+            return target.Col > from.Col ? "O-O" : "O-O-O";
+
+        bool targetOccupied = gs.Board[target.Row, target.Col] != null;
+        bool isEnPassant = piece.Type == PieceType.Pawn && from.Col != target.Col && !targetOccupied;
+        bool isCapture = targetOccupied || isEnPassant;
+        string dest = SquareName(target);
+
+        if (piece.Type == PieceType.Pawn)
+        {
+            var san = isCapture ? $"{FileChar(from.Col)}x{dest}" : dest;
+
+            bool promotes = (piece.Color == PieceColor.White && target.Row == 0)
+                         || (piece.Color == PieceColor.Black && target.Row == 7);
+
+            if (promotes)
+                san += "=" + PieceLetter(moveDto.PromotionChoice ?? PieceType.Queen);
+
+            return san;
+        }
+
+        return $"{PieceLetter(piece.Type)}{Disambiguation(gs, piece, target)}{(isCapture ? "x" : "")}{dest}";
+    }
+
+    /// <summary>
+    /// SAN disambiguation: when another piece of the same type and color can also reach the
+    /// target, qualify the origin by file, else rank, else both.
+    /// </summary>
+    private string Disambiguation(GameState gs, ChessPiece piece, Position target)
+    {
+        var rivals = gs.Pieces
+            .Where(p => p.Id != piece.Id && p.Type == piece.Type && p.Color == piece.Color && p.Position.Row >= 0)
+            .Where(p => GetLegalMovesForPiece(gs, p.Id).Any(m => m.Row == target.Row && m.Col == target.Col))
+            .ToList();
+
+        if (rivals.Count == 0)
+            return "";
+
+        if (rivals.All(p => p.Position.Col != piece.Position.Col))
+            return FileChar(piece.Position.Col).ToString();
+
+        if (rivals.All(p => p.Position.Row != piece.Position.Row))
+            return (8 - piece.Position.Row).ToString();
+
+        return $"{FileChar(piece.Position.Col)}{8 - piece.Position.Row}";
+    }
+
+    private static char FileChar(int col) => (char)('a' + col);
+
+    private static string SquareName(Position p) => $"{FileChar(p.Col)}{8 - p.Row}";
+
+    private static string PieceLetter(PieceType type) => type switch
+    {
+        PieceType.Knight => "N",
+        PieceType.Bishop => "B",
+        PieceType.Rook   => "R",
+        PieceType.Queen  => "Q",
+        PieceType.King   => "K",
+        _                => ""
+    };
 
     /// <summary>
     /// The repetition signature of a position: the first four FEN fields — piece placement,

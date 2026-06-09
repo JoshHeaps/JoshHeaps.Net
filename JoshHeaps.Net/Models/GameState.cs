@@ -40,6 +40,9 @@ public class GameState
     // Position keys (FEN placement/side/castling/en-passant) for threefold-repetition detection.
     public List<string> PositionHistory { get; set; }
 
+    // Moves in standard algebraic notation (SAN), in order, for PGN export.
+    public List<string> SanHistory { get; set; }
+
     // Half-moves since the last capture or pawn move (the FEN 50-move clock). Also tells
     // us how many trailing PositionHistory entries belong to the current repetition window.
     public int HalfmoveClock { get; set; }
@@ -68,5 +71,6 @@ public class GameState
         Pieces = [];
         MoveHistory = [];
         PositionHistory = [];
+        SanHistory = [];
     }
 }

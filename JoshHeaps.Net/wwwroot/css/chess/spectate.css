@@ -79,6 +79,21 @@ html, body {
     margin-top: 0.75rem;
 }
 
+.copyPgnBtn {
+    display: block;
+    margin: 0.75rem auto 0;
+    background-color: #8cd5ed;
+    color: #262626;
+    border: 0;
+    border-radius: 30px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+}
+
+.copyPgnBtn:hover {
+    background-color: #a5e0f2;
+}
+
 .backButton {
     display: none;
 }

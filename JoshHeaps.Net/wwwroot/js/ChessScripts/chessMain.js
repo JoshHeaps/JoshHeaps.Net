@@ -1,3 +1,35 @@
+let lastPgn = null;
+
+async function showCopyPgn(gameId) {
+    try {
+        lastPgn = await ChessAPI.getPgn(gameId);
+        const btn = document.getElementById("copyPgnBtn");
+        if (btn) btn.style.display = "";
+    } catch (err) {
+        console.warn("Could not load PGN.", err);
+    }
+}
+
+async function copyPgn() {
+    if (!lastPgn) return;
+
+    try {
+        await navigator.clipboard.writeText(lastPgn);
+        alert("📋 PGN copied to clipboard!");
+    } catch {
+        alert("Couldn't access the clipboard. Here's the PGN:\n\n" + lastPgn);
+    }
+}
+
+function resetCopyPgn() {
+    lastPgn = null;
+    const btn = document.getElementById("copyPgnBtn");
+    if (btn) btn.style.display = "none";
+}
+
+window.copyPgn = copyPgn;
+window.showCopyPgn = showCopyPgn;
+
 async function forfeitCurrentGame() {
     const gameId = ChessUtils.getCookie("chessGameId");
     const playerId = ChessUtils.getCookie("chessPlayerId");
@@ -14,6 +46,7 @@ async function forfeitCurrentGame() {
 async function startNewGame() {
     await ChessSignalR.stopConnection();
     await forfeitCurrentGame();
+    resetCopyPgn();
 
     try {
         const gameData = await ChessAPI.joinGame();
@@ -40,6 +73,7 @@ async function startNewGame() {
 async function startCPUGame() {
     await ChessSignalR.stopConnection();
     await forfeitCurrentGame();
+    resetCopyPgn();
 
     try {
         const difficulty = await ChessModals.promptDifficulty();

@@ -1,5 +1,6 @@
 ﻿using JoshHeaps.Net.Hubs;
 using JoshHeaps.Net.Models;
+using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -278,6 +279,18 @@ public class ChessController(
         ScheduleRemoveGame(gameState.GameId, _gameCleanupTimeout);
 
         return Ok();
+    }
+
+    /// <summary>
+    /// Export a game as PGN (works while the game is still in memory after it ends).
+    /// </summary>
+    [HttpGet("{gameId}/pgn")]
+    public ActionResult GetPgn(Guid gameId)
+    {
+        if (!_games.TryGetValue(gameId, out var gameState))
+            return NotFound("Game not found");
+
+        return Content(gameState.ToPgn(), "application/x-chess-pgn");
     }
 
     /// <summary>
