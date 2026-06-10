@@ -6,6 +6,10 @@ const GameState = {
     legalMoves: [],
     previousMoveStart: null,
     previousMoveEnd: null,
+    // Highest ply (move count) already rendered. Lets us ignore stale or
+    // already-applied updates that arrive out of order, including the echo
+    // of our own move.
+    lastVersion: -1,
 
     reset() {
         this.currentGameId = null;
@@ -15,12 +19,22 @@ const GameState = {
         this.legalMoves = [];
         this.previousMoveStart = null;
         this.previousMoveEnd = null;
+        this.lastVersion = -1;
+    },
+
+    shouldApply(version) {
+        return typeof version !== "number" || version > this.lastVersion;
+    },
+
+    setVersion(version) {
+        if (typeof version === "number") this.lastVersion = version;
     },
 
     setGameInfo(gameId, playerId, isWhite) {
         this.currentGameId = gameId;
         this.currentPlayerId = playerId;
         this.currentPlayerIsWhite = isWhite;
+        this.lastVersion = -1;
     },
 
     setSelectedPiece(piece) {

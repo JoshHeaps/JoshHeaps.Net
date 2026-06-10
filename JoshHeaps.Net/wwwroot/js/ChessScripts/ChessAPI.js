@@ -46,13 +46,15 @@ const ChessAPI = {
             throw new Error(message || "Invalid move or not your turn.");
         }
 
-        const result = await response.json();
+        // The move endpoint returns both the move result and the full resulting
+        // board state, so the caller can render without a follow-up fetch.
+        const data = await response.json();
 
-        if (!result.success) {
-            throw new Error(result.message || "Invalid move or not your turn.");
+        if (!data.result.success) {
+            throw new Error(data.result.message || "Invalid move or not your turn.");
         }
 
-        return result;
+        return data;
     },
 
     async handleMove(targetRow, targetCol) {
@@ -85,16 +87,14 @@ const ChessAPI = {
         GameState.setPreviousMove([GameState.selectedPiece.row, GameState.selectedPiece.col], [targetRow, targetCol]);
 
         try {
-            const moveResult = await this.makeMove(moveDto);
+            const { result, state } = await this.makeMove(moveDto);
 
-            const updatedGame = await this.getGameState(GameState.currentGameId);
-            ChessBoard.renderPieces(updatedGame.pieces);
+            ChessBoard.renderState(state);
 
             GameState.clearSelection();
             ChessInteractions.clearHighlights();
 
-            await ChessSignalR.notifyMoveMade(moveDto, moveResult);
-            this.alertGameStatusChange(moveResult);
+            this.alertGameStatusChange(result);
 
         } catch (error) {
             alert("❌ " + error.message);

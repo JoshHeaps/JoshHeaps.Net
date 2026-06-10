@@ -30,6 +30,18 @@ function resetCopyPgn() {
 window.copyPgn = copyPgn;
 window.showCopyPgn = showCopyPgn;
 
+// Mobile slide-up menu (move list + secondary actions).
+function toggleMenu() {
+    document.body.classList.toggle("menu-open");
+}
+
+function closeMenu() {
+    document.body.classList.remove("menu-open");
+}
+
+window.toggleMenu = toggleMenu;
+window.closeMenu = closeMenu;
+
 async function forfeitCurrentGame() {
     const gameId = ChessUtils.getCookie("chessGameId");
     const playerId = ChessUtils.getCookie("chessPlayerId");
@@ -44,6 +56,7 @@ async function forfeitCurrentGame() {
 }
 
 async function startNewGame() {
+    closeMenu();
     await ChessSignalR.stopConnection();
     await forfeitCurrentGame();
     resetCopyPgn();
@@ -63,7 +76,7 @@ async function startNewGame() {
         await ChessSignalR.setupConnection();
 
         const gameState = await ChessAPI.getGameState(gameData.gameId);
-        ChessBoard.renderPieces(gameState.pieces);
+        ChessBoard.renderState(gameState);
 
     } catch (error) {
         console.error("Failed to start new game:", error);
@@ -71,6 +84,7 @@ async function startNewGame() {
 }
 
 async function startCPUGame() {
+    closeMenu();
     await ChessSignalR.stopConnection();
     await forfeitCurrentGame();
     resetCopyPgn();
@@ -91,7 +105,7 @@ async function startCPUGame() {
         await ChessSignalR.setupConnection();
 
         const gameState = await ChessAPI.getGameState(gameData.gameId);
-        ChessBoard.renderPieces(gameState.pieces);
+        ChessBoard.renderState(gameState);
 
     } catch (error) {
         console.error("Failed to start CPU game:", error);
@@ -111,7 +125,7 @@ async function resumeSavedGame() {
             GameState.setGameInfo(savedGameId, savedPlayerId, savedPlayerIsWhite === "true");
 
             await ChessSignalR.setupConnection();
-            ChessBoard.renderPieces(gameState.pieces);
+            ChessBoard.renderState(gameState);
 
         } catch (err) {
             console.warn("Saved game not found or expired.", err);
