@@ -1,5 +1,4 @@
-﻿using JoshHeaps.Net.Models;
-using Microsoft.AspNetCore.SignalR;
+﻿using Microsoft.AspNetCore.SignalR;
 
 namespace JoshHeaps.Net.Hubs;
 
@@ -9,11 +8,6 @@ public class ChessHub : Hub
     {
         Console.WriteLine($"🔌 Joining group {gameId}");
         await Groups.AddToGroupAsync(Context.ConnectionId, gameId);
-    }
-
-    public async Task MoveMade(string gameId, MoveDto moveDto, MoveResultDto moveResult)
-    {
-        await Clients.OthersInGroup(gameId).SendAsync("ReceiveMoveUpdate", gameId, moveDto, moveResult);
     }
 
     public async Task LeaveWebsocketGroup(string gameId)

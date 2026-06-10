@@ -26,7 +26,7 @@ public sealed class ComputerMoveOrchestrator(
         var result = chessService.MakeMove(state, move);
 
         await chessHub.Clients.Group(state.GameId.ToString())
-            .SendAsync("ReceiveMoveUpdate", state.GameId.ToString(), move, result);
+            .SendAsync("ReceiveMoveUpdate", state.GameId.ToString(), move, result, state.ToDto());
 
         return (move, result);
     }
