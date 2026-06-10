@@ -1,12 +1,4 @@
-﻿#boardContainer {
-    position: relative;
-    width: fit-content;
-    margin: 2vw auto;
-}
-
-#chessBoard {
-    width: 60vw;
-    height: 60vw;
+﻿#chessBoard {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
     grid-template-rows: repeat(8, 1fr);

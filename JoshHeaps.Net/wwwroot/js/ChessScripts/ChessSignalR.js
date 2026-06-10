@@ -11,8 +11,8 @@ const ChessSignalR = {
             console.error("❌ SignalR connection closed:", err?.message);
         });
 
-        this.connection.on("ReceiveMoveUpdate", async (gameId, moveDto, moveResultDto) => {
-            await this.handleMoveUpdate(gameId, moveDto, moveResultDto);
+        this.connection.on("ReceiveMoveUpdate", async (gameId, moveDto, moveResultDto, state) => {
+            await this.handleMoveUpdate(gameId, moveDto, moveResultDto, state);
         });
 
         this.connection.on("ReceiveGameOver", async (gameId, winner, reason) => {
@@ -28,12 +28,14 @@ const ChessSignalR = {
         }
     },
 
-    async handleMoveUpdate(gameId, moveDto, moveResultDto) {
+    async handleMoveUpdate(gameId, moveDto, moveResultDto, state) {
         if (gameId !== GameState.currentGameId) return;
 
-        const gameState = await ChessAPI.getGameState(gameId);
+        // Drop the echo of our own move and any out-of-order delivery.
+        if (!GameState.shouldApply(state?.version)) return;
+
         GameState.setPreviousMove([moveDto.sourceRow, moveDto.sourceCol], [moveDto.targetRow, moveDto.targetCol]);
-        ChessBoard.renderPieces(gameState.pieces);
+        ChessBoard.renderState(state);
 
         ChessAPI.alertGameStatusChange(moveResultDto);
     },
@@ -48,12 +50,6 @@ const ChessSignalR = {
 
         showCopyPgn(gameId);
         await this.leaveGame();
-    },
-
-    async notifyMoveMade(moveDto, moveResult) {
-        if (this.connection) {
-            await this.connection.invoke("MoveMade", GameState.currentGameId, moveDto, moveResult);
-        }
     },
 
     async leaveGame() {

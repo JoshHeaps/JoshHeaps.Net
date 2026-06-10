@@ -176,33 +176,7 @@ public class ChessController(
         if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
-        var response = new
-        {
-            gameState.GameId,
-            CurrentPlayer = gameState.CurrentPlayer.ToString(),
-            gameState.IsCheck,
-            gameState.IsCheckmate,
-            gameState.IsStalemate,
-            gameState.IsThreefoldRepetition,
-            EnPassantTarget = gameState.EnPassantTarget?.ToString() ?? null,
-            gameState.WhiteCanCastleKingside,
-            gameState.WhiteCanCastleQueenside,
-            gameState.BlackCanCastleKingside,
-            gameState.BlackCanCastleQueenside,
-            Pieces = gameState.Pieces
-                .Where(p => p.Position.Row >= 0)
-                .Select(p => new {
-                    p.Id,
-                    p.Type,
-                    p.Color,
-                    p.Position.Row,
-                    p.Position.Col,
-                    p.HasMoved
-                }),
-            gameState.MoveHistory
-        };
-
-        return Ok(response);
+        return Ok(gameState.ToDto());
     }
 
     /// <summary>
@@ -210,7 +184,7 @@ public class ChessController(
     /// The test passes a JSON body with a MoveDto.
     /// </summary>
     [HttpPost("move")]
-    public ActionResult MakeMove([FromBody] MoveDto moveDto)
+    public async Task<ActionResult> MakeMove([FromBody] MoveDto moveDto)
     {
         if (!_games.TryGetValue(moveDto.GameId, out var gameState))
             return NotFound("Game not found");
@@ -245,10 +219,18 @@ public class ChessController(
         else
             ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
+        var state = gameState.ToDto();
+
+        // Broadcast the move (with the full resulting state) to everyone watching this
+        // game. The mover also receives this echo but drops it via the version guard,
+        // since it already rendered the same state from this response.
+        await chessHub.Clients.Group(gameState.GameId.ToString())
+            .SendAsync("ReceiveMoveUpdate", gameState.GameId.ToString(), moveDto, result, state);
+
         if (!isGameOver && gameState.IsVsComputer && gameState.Computer is not null)
             queue.Queue(() => orchestrator.PlayAsync(gameState, gameState.Computer!));
 
-        return Ok(result);
+        return Ok(new { result, state });
     }
 
     /// <summary>

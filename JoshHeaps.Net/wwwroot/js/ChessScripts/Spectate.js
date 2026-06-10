@@ -11,8 +11,8 @@ const Spectate = {
             .configureLogging(signalR.LogLevel.Warning)
             .build();
 
-        this.connection.on("ReceiveMoveUpdate", (gameId, moveDto) =>
-            this.handleMoveUpdate(gameId, moveDto));
+        this.connection.on("ReceiveMoveUpdate", (gameId, moveDto, _moveResult, state) =>
+            this.handleMoveUpdate(gameId, moveDto, state));
 
         this.connection.on("ReceiveGameOver", (gameId) => this.removeGame(gameId));
 
@@ -117,7 +117,10 @@ const Spectate = {
 
         if (!response.ok) return;
 
-        const state = await response.json();
+        this.renderFromState(gameId, await response.json());
+    },
+
+    renderFromState(gameId, state) {
         const result = this.resultTextFromState(state);
         const stored = this.games.get(gameId);
 
@@ -128,10 +131,13 @@ const Spectate = {
         this.setResult(gameId, result);
     },
 
-    async handleMoveUpdate(gameId, moveDto) {
+    async handleMoveUpdate(gameId, moveDto, state) {
         if (!this.games.has(gameId)) return;
 
-        await this.renderGame(gameId);
+        // Render from the pushed state; fall back to a fetch only if it's missing.
+        if (state) this.renderFromState(gameId, state);
+        else await this.renderGame(gameId);
+
         this.highlightMove(gameId, moveDto);
     },
 
