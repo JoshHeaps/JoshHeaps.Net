@@ -6,7 +6,14 @@
 }
 
 <div id="chessContainer">
-    <div id="boardContainer">
+    <section id="boardArea">
+        <div class="playerBar" id="topPlayerBar">
+            <span class="playerDot black"></span>
+            <span class="playerName">Opponent</span>
+            <div class="capturedTray" id="captured-top"></div>
+            <span class="advantage" id="advantage-top"></span>
+        </div>
+
         <div id="chessBoard">
             <!-- Placeholder squares -->
             @for (int i = 0; i < 64; i++)
@@ -14,18 +21,41 @@
                 <div id="square-@i" class="chessSquare @( (i + i / 8) % 2 == 0 ? "light" : "dark" )"></div>
             }
         </div>
-    </div>
 
-    <div id="textContainer" class="sideContent">
-        <h1>Chess</h1>
-        <p>Click a button to start a game :)</p>
-    </div>
+        <div class="playerBar" id="bottomPlayerBar">
+            <span class="playerDot white"></span>
+            <span class="playerName">You</span>
+            <div class="capturedTray" id="captured-bottom"></div>
+            <span class="advantage" id="advantage-bottom"></span>
+        </div>
+    </section>
 
-    <div id="buttonContainer" class="sideContent">
-        <button id="startGameBtn" onclick="startNewGame()">Start New Game</button>
-        <button id="startCPUGame" onclick="startCPUGame()">Vs CPU</button>
-        <button id="copyPgnBtn" onclick="copyPgn()" style="display: none">Copy PGN</button>
-        <a id="watchLink" href="/watch">Watch other games →</a>
+    <aside id="gamePanel">
+        <header class="panelHeader">
+            <span class="panelLogo">&#9822;</span>
+            <h1>Chess</h1>
+            <button id="menuClose" class="iconBtn" aria-label="Close menu" onclick="closeMenu()">&times;</button>
+        </header>
+
+        <div id="moveList">
+            <p class="movePlaceholder">Moves will appear here once a game begins.</p>
+        </div>
+
+        <div id="statusLine">Start a game to play.</div>
+
+        <div id="panelButtons">
+            <button id="startGameBtn" class="btn btn-primary" onclick="startNewGame()">New Game</button>
+            <button id="startCPUGame" class="btn btn-secondary" onclick="startCPUGame()">Play vs CPU</button>
+            <button id="copyPgnBtn" class="btn btn-ghost" onclick="copyPgn()" style="display: none">Copy PGN</button>
+            <a id="watchLink" href="/watch">Watch other games &rarr;</a>
+        </div>
+    </aside>
+
+    <div id="menuBackdrop" onclick="closeMenu()"></div>
+
+    <div id="mobileBar">
+        <span id="mobileStatus">Start a game to play.</span>
+        <button id="menuToggle" class="btn btn-primary" onclick="toggleMenu()">Menu</button>
     </div>
 </div>
 
@@ -61,17 +91,20 @@
 
 @section Scripts {
     <script src="~/js/signalr/signalr.min.js"></script>
-    <script src="~/js/ChessScripts/GameState.js"></script>
-    <script src="~/js/ChessScripts/ChessUtils.js"></script>
-    <script src="~/js/ChessScripts/ChessAPI.js"></script>
-    <script src="~/js/ChessScripts/ChessSignalR.js"></script>
-    <script src="~/js/ChessScripts/ChessInteractions.js"></script>
-    <script src="~/js/ChessScripts/ChessBoard.js"></script>
-    <script src="~/js/ChessScripts/ChessModals.js"></script>
-    <script src="~/js/ChessScripts/chessMain.js"></script>
+    <script src="~/js/ChessScripts/GameState.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/ChessUtils.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/ChessAPI.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/ChessSignalR.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/ChessInteractions.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/ChessBoard.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/ChessModals.js?v=@ViewData["cssVersion"]"></script>
+    <script src="~/js/ChessScripts/chessMain.js?v=@ViewData["cssVersion"]"></script>
 }
 
 @section Styles {
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="~/css/chess/game.css?v=@ViewData["cssVersion"]" />
     <link rel="stylesheet" href="~/css/chess/site.css?v=@ViewData["cssVersion"]" />
 }
