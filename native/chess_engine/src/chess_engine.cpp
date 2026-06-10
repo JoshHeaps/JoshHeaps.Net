@@ -199,13 +199,23 @@ static int evaluatePawn(const chess::Position& pos, const chess::Color c, const 
     int score = 100;
 
     if (isPassed && !isBlocked)
-        score += squaresToPromotion * 10; // Bonus for passed pawns, more as they get closer to promotion
+        score += (6 - squaresToPromotion) * 100; // Bonus for passed pawns, more as they get closer to promotion
     if (isDoubled)
         score -= 20; // Penalty for doubled pawns
     if (isBlocked)
         score -= 20; // Penalty for blocked pawns
 
     return score;
+}
+
+static int castleIncentive(const chess::Position& pos, chess::Color c) {
+    if (!pos.pieces(chess::QUEEN))
+        return 0;
+    chess::Square k = pos.king_square(c);
+    bool castled = (c == chess::WHITE) ? (k == chess::G1 || k == chess::C1)
+        : (k == chess::G8 || k == chess::C8);
+
+    return castled ? 600 : 0;
 }
 
 static int evaluatePiece(const chess::Position& pos, const chess::Square& s, const chess::Piece& pc, const chess::Color& c) {
@@ -216,11 +226,14 @@ static int evaluatePiece(const chess::Position& pos, const chess::Square& s, con
         case chess::BISHOP: score = 330; break;
         case chess::ROOK:   score = 500; break;
         case chess::QUEEN:  score = 900; break;
+        case chess::KING:   score = castleIncentive(pos, c); break;
         default: return 0;
     }
 
     score += center_multiplier(s);
-    score += piece_mobility(pos, s, pc, c) * 10;
+
+    if (pc != chess::B_PAWN && pc != chess::W_PAWN)
+        score += piece_mobility(pos, s, pc, c) * 25;
 
     return score;
 }
@@ -272,13 +285,15 @@ static int piece_value(chess::PieceType pt) {
     }
 }
 
-/* Heuristic for searching the most promising moves first, which makes alpha-beta
- * prune far more. The TT's best move (if any) goes first, then checks, then captures
- * by MVV-LVA (grab the most valuable victim with the least valuable attacker).
- * `scoreChecks` gates the expensive gives_check term to near-leaf nodes. */
-static int order_score(chess::Position& pos, chess::Move m, chess::Move ttMove, bool scoreChecks) {
+/* Heuristic for searching the most promising moves first, which makes alpha-beta prune far
+ * more. Bands, highest first: the TT best move, then captures by MVV-LVA (most valuable
+ * victim, least valuable attacker), then the two killer moves for this ply (quiet moves that
+ * cut a sibling), then the remaining quiet moves. `killers` points at this ply's two-entry
+ * slot; `scoreChecks` gates the expensive gives_check term to near-leaf nodes. */
+static int order_score(chess::Position& pos, chess::Move m, chess::Move ttMove,
+                       const chess::Move* killers, bool scoreChecks) {
     if (m == ttMove)
-        return 2000000;                  /* dwarfs any capture/check score below */
+        return 2000000;                  /* dwarfs any capture/killer/check score below */
 
     int score = 0;
 
@@ -286,11 +301,26 @@ static int order_score(chess::Position& pos, chess::Move m, chess::Move ttMove, 
         score += 1000;
 
     chess::Piece victim = pos.piece_on(m.to());
+#ifdef BENCH_DISABLE_KILLERS
+    /* Benchmark A/B only (defined by bench.ps1): the pre-killer ordering — captures by
+     * MVV-LVA above quiet moves, no killer band — so the script can time the killer speedup. */
+    (void)killers;
     if (victim != chess::NO_PIECE)
         score += 100 + 10 * piece_value(chess::type_of(victim))
                      - piece_value(chess::type_of(pos.piece_on(m.from())));
     else if (m.type() == chess::EN_PASSANT)
         score += 100 + 10 * piece_value(chess::PAWN);
+#else
+    if (victim != chess::NO_PIECE)
+        score += 100000 + 10 * piece_value(chess::type_of(victim))
+                        - piece_value(chess::type_of(pos.piece_on(m.from())));
+    else if (m.type() == chess::EN_PASSANT)
+        score += 100000 + 10 * piece_value(chess::PAWN);
+    else if (m == killers[0])
+        score += 90000;                  /* quiet move that beta-cut a sibling at this ply */
+    else if (m == killers[1])
+        score += 80000;
+#endif
 
     return score;
 }
@@ -298,12 +328,13 @@ static int order_score(chess::Position& pos, chess::Move m, chess::Move ttMove, 
 /* Sort the move list in place, best-scoring first. Scores are computed once up
  * front so gives_check isn't re-evaluated on every comparison. ttMove may be
  * MOVE_NONE, in which case no move matches it and ordering falls back to captures. */
-static void order_moves(chess::Position& pos, chess::MoveList& moves, chess::Move ttMove, bool scoreChecks) {
+static void order_moves(chess::Position& pos, chess::MoveList& moves, chess::Move ttMove,
+                        const chess::Move* killers, bool scoreChecks) {
     struct ScoredMove { int score; chess::Move move; };
     ScoredMove scored[256];
 
     for (int i = 0; i < moves.size(); i++)
-        scored[i] = { order_score(pos, moves.moves[i], ttMove, scoreChecks), moves.moves[i] };
+        scored[i] = { order_score(pos, moves.moves[i], ttMove, killers, scoreChecks), moves.moves[i] };
 
     std::sort(scored, scored + moves.size(),
               [](const ScoredMove& a, const ScoredMove& b) { return a.score > b.score; });
@@ -330,13 +361,25 @@ CHESS_API int CHESS_CALL engine_set_option(EngineHandle engine,
     return CHESS_OK;                                      /* TODO: store options */
 }
 
+/* Per-search scratch, threaded through the recursion. Kept off global scope so two engine
+ * handles can search concurrently without sharing node counts or killer tables. killers[ply]
+ * holds up to two quiet moves that recently caused a beta cutoff at that ply; trying them
+ * early (right after captures) prunes far more — the quiet-move ordering the search otherwise
+ * lacks. */
+static constexpr int MAX_PLY = 128;            /* ply never exceeds maxDepth (<= 20) */
+
+struct SearchContext {
+    uint64_t    nodes = 0;
+    chess::Move killers[MAX_PLY][2] = {};      /* [ply][slot]; MOVE_NONE until filled */
+};
+
 /* Negamax alpha-beta over the shared transposition table. `maxDepth` is the searching
  * bot's difficulty (its root depth); `depth` is remaining depth (draft); `ply` is
  * distance from the root (mate scoring only). Scores are side-to-move-relative.
  * Fail-soft: returns the true best found even outside [alpha, beta]. */
 static int negamax(chess::Position& pos, int maxDepth, int depth, int ply,
-                   int alpha, int beta, bool whiteToMove, uint64_t& nodes) {
-    nodes++;
+                   int alpha, int beta, bool whiteToMove, SearchContext& ctx) {
+    ctx.nodes++;
 
     /* A draw is 0 even at the search horizon, and the TT key doesn't encode repetition
      * history, so this must come before both the leaf eval and any TT probe. */
@@ -375,7 +418,7 @@ static int negamax(chess::Position& pos, int maxDepth, int depth, int ply,
     if (moves.size() == 0)
         return pos.is_draw() ? 0 : -MATE + ply;       /* checkmate against side to move */
 
-    order_moves(pos, moves, ttMove, depth <= 2);
+    order_moves(pos, moves, ttMove, ctx.killers[ply], depth <= 2);
 
     const int alphaOrig = alpha;
     int best = -INF;
@@ -384,7 +427,7 @@ static int negamax(chess::Position& pos, int maxDepth, int depth, int ply,
     for (int i = 0; i < moves.size(); i++) {
         chess::Move move = moves.moves[i];
         pos.do_move(move);
-        int score = -negamax(pos, maxDepth, depth - 1, ply + 1, -beta, -alpha, !whiteToMove, nodes);
+        int score = -negamax(pos, maxDepth, depth - 1, ply + 1, -beta, -alpha, !whiteToMove, ctx);
         pos.undo_move(move);
 
         if (score > best) {
@@ -393,8 +436,18 @@ static int negamax(chess::Position& pos, int maxDepth, int depth, int ply,
         }
         if (best > alpha)
             alpha = best;
-        if (best >= beta)
+        if (best >= beta) {
+            /* A quiet move good enough to fail high here is a strong candidate in sibling
+             * lines at this ply — remember it as a killer. pos is back to pre-move state
+             * after undo_move, so piece_on(to) still flags a capture correctly. */
+            bool isCapture = pos.piece_on(move.to()) != chess::NO_PIECE
+                          || move.type() == chess::EN_PASSANT;
+            if (!isCapture && ply < MAX_PLY && ctx.killers[ply][0] != move) {
+                ctx.killers[ply][1] = ctx.killers[ply][0];
+                ctx.killers[ply][0] = move;
+            }
             break;                                    /* fail-high cutoff */
+        }
     }
 
     Bound flag = best <= alphaOrig ? Bound::UPPER
@@ -448,7 +501,7 @@ CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
     if (moves.size() == 0)
         return CHESS_ERR_NO_MOVE;
 
-    uint64_t nodes = 0;
+    SearchContext ctx;
     int maxDepth = depth_for_skill(engine->skill);
     chess::Move bestMove = moves.moves[0];            /* guaranteed-legal fallback */
 
@@ -460,12 +513,12 @@ CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
         chess::Move iterBest = bestMove;
         int iterScore = -INF;
 
-        order_moves(pos, moves, iterBest, true);
+        order_moves(pos, moves, iterBest, ctx.killers[0], true);
 
         for (int i = 0; i < moves.size(); i++) {
             chess::Move move = moves.moves[i];
             pos.do_move(move);
-            int score = -negamax(pos, maxDepth, d - 1, 1, -beta, -alpha, !whiteToMove, nodes);
+            int score = -negamax(pos, maxDepth, d - 1, 1, -beta, -alpha, !whiteToMove, ctx);
             pos.undo_move(move);
 
             if (score > iterScore) {
@@ -479,7 +532,7 @@ CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
         bestMove = iterBest;                          /* commit only a fully completed iteration */
 
         std::fprintf(stderr, "depth %d nodes %llu best %s score %d\n",
-                     d, static_cast<unsigned long long>(nodes),
+                     d, static_cast<unsigned long long>(ctx.nodes),
                      chess::move_to_uci(iterBest).c_str(), iterScore);
     }
 
