@@ -4,8 +4,8 @@ const ChessAPI = {
         return await response.json();
     },
 
-    async createCPUGame(difficulty) {
-        const response = await fetch(`/api/chess/new/${difficulty}`);
+    async createCPUGame(difficulty, color = "random") {
+        const response = await fetch(`/api/chess/new/${difficulty}?color=${color}`);
         return await response.json();
     },
 

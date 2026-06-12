@@ -91,7 +91,8 @@ async function startCPUGame() {
 
     try {
         const difficulty = await ChessModals.promptDifficulty();
-        const gameData = await ChessAPI.createCPUGame(difficulty);
+        const color = await ChessModals.promptColor();
+        const gameData = await ChessAPI.createCPUGame(difficulty, color);
 
         GameState.setGameInfo(gameData.gameId, gameData.id, gameData.isWhite);
         GameState.clearPreviousMove();

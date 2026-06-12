@@ -208,14 +208,32 @@ static int evaluatePawn(const chess::Position& pos, const chess::Color c, const 
     return score;
 }
 
+static int piece_value(chess::PieceType pt) {
+    switch (pt) {
+    case chess::PAWN:   return 100;
+    case chess::KNIGHT: return 320;
+    case chess::BISHOP: return 330;
+    case chess::ROOK:   return 500;
+    case chess::QUEEN:  return 900;
+    default:            return 0;
+    }
+}
+
 static int castleIncentive(const chess::Position& pos, chess::Color c) {
-    if (!pos.pieces(chess::QUEEN))
-        return 0;
+    chess::Bitboard pcs = pos.pieces();
+    int total = 0;
+    while (pcs) {
+        chess::Square s = chess::pop_lsb(pcs);
+        chess::Piece pc = pos.piece_on(s);
+        chess::Color c = chess::color_of(pc);
+        total += piece_value(chess::type_of(pc));
+    }
+
     chess::Square k = pos.king_square(c);
     bool castled = (c == chess::WHITE) ? (k == chess::G1 || k == chess::C1)
         : (k == chess::G8 || k == chess::C8);
 
-    return castled ? 600 : 0;
+    return castled ? (total / 10) : 0;
 }
 
 static int evaluatePiece(const chess::Position& pos, const chess::Square& s, const chess::Piece& pc, const chess::Color& c) {
@@ -273,17 +291,6 @@ static int evaluate_stm(const chess::Position& pos, bool whiteToMove) {
  * Non-mate scores pass through untouched. */
 static int score_to_tt(int s, int ply)   { return s >=  MATE_BOUND ? s + ply : s <= -MATE_BOUND ? s - ply : s; }
 static int score_from_tt(int s, int ply) { return s >=  MATE_BOUND ? s - ply : s <= -MATE_BOUND ? s + ply : s; }
-
-static int piece_value(chess::PieceType pt) {
-    switch (pt) {
-        case chess::PAWN:   return 100;
-        case chess::KNIGHT: return 320;
-        case chess::BISHOP: return 330;
-        case chess::ROOK:   return 500;
-        case chess::QUEEN:  return 900;
-        default:            return 0;
-    }
-}
 
 /* Heuristic for searching the most promising moves first, which makes alpha-beta prune far
  * more. Bands, highest first: the TT best move, then captures by MVV-LVA (most valuable

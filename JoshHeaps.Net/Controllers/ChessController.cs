@@ -35,7 +35,7 @@ public class ChessController(
     /// </summary>
     [HttpGet("new")]
     [HttpGet("new/{difficulty}")]
-    public ActionResult CreateGame(int difficulty = 20)
+    public ActionResult CreateGame(int difficulty = 20, string color = "random")
     {
         var gameState = chessService.CreateNewGame();
         _games[gameState.GameId] = gameState;
@@ -45,7 +45,12 @@ public class ChessController(
         gameState.BlackJoined = true;
         Guid playerId = Guid.NewGuid();
         Guid computerId = Guid.NewGuid();
-        var isWhite = Random.Shared.Next(2) == 0;
+        var isWhite = color.ToLowerInvariant() switch
+        {
+            "white" => true,
+            "black" => false,
+            _ => Random.Shared.Next(2) == 0,
+        };
 
         gameState.Computer = engineFactory.Create(difficulty);
 

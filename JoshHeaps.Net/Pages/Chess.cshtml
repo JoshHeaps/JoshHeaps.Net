@@ -89,6 +89,15 @@
     </div>
 </div>
 
+<div id="colorModal" style="display: none;">
+    <p>Play as:</p>
+    <div id="colorButtonContainer">
+        <button onclick="selectColor('white')">White</button>
+        <button onclick="selectColor('black')">Black</button>
+        <button onclick="selectColor('random')">Random</button>
+    </div>
+</div>
+
 @section Scripts {
     <script src="~/js/signalr/signalr.min.js"></script>
     <script src="~/js/ChessScripts/GameState.js?v=@ViewData["cssVersion"]"></script>
