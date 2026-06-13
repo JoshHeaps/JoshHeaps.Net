@@ -1,5 +1,6 @@
 using JoshHeaps.Net.Models;
 using JoshHeaps.Net.Services.Interfaces;
+using Microsoft.Extensions.Options;
 
 namespace JoshHeaps.Net.Services.Implementations;
 
@@ -16,11 +17,30 @@ public sealed class LearnedWeightsStore : ILearnedWeightsStore
 
     public string WeightsFilePath { get; }
 
-    public LearnedWeightsStore(IHostEnvironment env)
+    public LearnedWeightsStore(IHostEnvironment env, IOptions<ChessEngineOptions> options, ILogger<LearnedWeightsStore> logger)
     {
-        WeightsFilePath = Path.Combine(env.ContentRootPath, "chess-data", "learned-weights.txt");
-        Directory.CreateDirectory(Path.GetDirectoryName(WeightsFilePath)!);
-        CustomChessEngine.NativeMethods.learned_load(WeightsFilePath);
+        // Prefer the configured path (production points this outside the deploy dir); fall
+        // back to the content root for local dev.
+        var configured = options.Value.WeightsPath;
+        WeightsFilePath = string.IsNullOrWhiteSpace(configured)
+            ? Path.Combine(env.ContentRootPath, "chess-data", "learned-weights.txt")
+            : configured;
+
+        // A missing/unwritable/misconfigured path must not take down the whole app — the
+        // learned engine just plays from a neutral table and can't persist training.
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(WeightsFilePath)!);
+            CustomChessEngine.NativeMethods.learned_load(WeightsFilePath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "Could not initialize the learned-weights store at {Path}. The learned engine will " +
+                "play from a neutral table and training will not persist. In production set " +
+                "ChessEngine:WeightsPath (env ChessEngine__WeightsPath) to a service-writable directory.",
+                WeightsFilePath);
+        }
     }
 
     public nint CreateTrainer() => CustomChessEngine.NativeMethods.trainer_create();

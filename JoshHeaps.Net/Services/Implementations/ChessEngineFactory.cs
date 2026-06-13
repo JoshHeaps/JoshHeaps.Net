@@ -19,6 +19,16 @@ public sealed class ChessEngineOptions
     public const string SectionName = "ChessEngine";
 
     public ChessEngineKind Engine { get; set; } = ChessEngineKind.Stockfish;
+
+    /// <summary>
+    /// Absolute path to the learned-weights file. Leave null to default to
+    /// <c>{ContentRoot}/chess-data/learned-weights.txt</c> (fine for local dev). In
+    /// production set this to a stable, service-writable location OUTSIDE the deploy
+    /// directory (e.g. <c>/var/lib/joshheaps/chess-data/learned-weights.txt</c>) so the
+    /// trained weights survive deploys and avoid deploy-user vs service-user permission
+    /// clashes. Override via the <c>ChessEngine__WeightsPath</c> environment variable.
+    /// </summary>
+    public string? WeightsPath { get; set; }
 }
 
 /// <summary>Creates the configured <see cref="IChessEngine"/> per game.</summary>
