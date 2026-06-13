@@ -29,6 +29,13 @@ public sealed class ChessEngineOptions
     /// clashes. Override via the <c>ChessEngine__WeightsPath</c> environment variable.
     /// </summary>
     public string? WeightsPath { get; set; }
+
+    /// <summary>
+    /// When true (and outside Development), a background service continuously plays the learned
+    /// engine against Stockfish to train it. Set to false to stop auto-training without a
+    /// redeploy. Override via the <c>ChessEngine__AutoTrain</c> environment variable.
+    /// </summary>
+    public bool AutoTrain { get; set; } = true;
 }
 
 /// <summary>Creates the configured <see cref="IChessEngine"/> per game.</summary>

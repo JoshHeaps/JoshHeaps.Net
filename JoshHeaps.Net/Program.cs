@@ -26,9 +26,18 @@ builder.Services.Configure<ChessEngineOptions>(configuration.GetSection(ChessEng
 builder.Services.AddSingleton<ILearnedWeightsStore, LearnedWeightsStore>();
 builder.Services.AddSingleton<IChessEngineFactory, ChessEngineFactory>();
 builder.Services.AddSingleton<IComputerMoveOrchestrator, ComputerMoveOrchestrator>();
+builder.Services.AddSingleton<IGameStore, GameStore>();
+builder.Services.AddSingleton<ISelfPlayCoordinator, SelfPlayCoordinator>();
 
 if (!builder.Environment.IsDevelopment())
+{
     builder.Services.AddHostedService<AutoIpUpdateService>();
+
+    // Continuously train the learned engine against Stockfish in the background. Toggle off
+    // via ChessEngine:AutoTrain (env ChessEngine__AutoTrain=false) without a redeploy.
+    if (configuration.GetValue($"{ChessEngineOptions.SectionName}:{nameof(ChessEngineOptions.AutoTrain)}", true))
+        builder.Services.AddHostedService<AutoTrainingService>();
+}
 
 var app = builder.Build();
 
