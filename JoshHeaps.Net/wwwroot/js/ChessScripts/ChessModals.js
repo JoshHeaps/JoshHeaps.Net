@@ -23,6 +23,16 @@ const ChessModals = {
                 resolve(difficulty);
             };
         });
+    },
+
+    promptColor() {
+        return new Promise(resolve => {
+            document.getElementById("colorModal").style.display = "block";
+            window.selectColor = (color) => {
+                document.getElementById("colorModal").style.display = "none";
+                resolve(color);
+            };
+        });
     }
 };
 

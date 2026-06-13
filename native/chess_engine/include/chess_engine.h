@@ -32,6 +32,9 @@ extern "C" {                          /* prevent C++ name mangling */
  * Internally it points to your engine state object. */
 typedef struct ChessEngine* EngineHandle;
 
+/* Opaque per-game training accumulator (see the learned-weights ABI at the bottom). */
+typedef struct Trainer* TrainerHandle;
+
 /* Return codes. 0 == success; negative == error. Keep these values stable. */
 enum {
     CHESS_OK              =  0,
@@ -78,6 +81,32 @@ CHESS_API int CHESS_CALL engine_version(char* out_buf, int out_len);
 
 /* Destroy an instance created by engine_create. Safe to call with NULL. */
 CHESS_API void CHESS_CALL engine_destroy(EngineHandle engine);
+
+/* ---- Learned-weights / training ABI ----
+ * The learned engine's weights live process-globally here. The host orchestrates games but
+ * owns no chess logic: it points the engine at the weights file, records each played
+ * position, and applies the game's result. */
+
+/* Load the global learned weights from `path` and remember it for later saves. Idempotent;
+ * a missing/short file leaves the weights neutral. Call once before learned play/training. */
+CHESS_API void CHESS_CALL learned_load(const char* path);
+
+/* Copy the global weights out for visualization: 6*64 midgame + 6*64 endgame (PAWN..KING,
+ * squares 0..63) + feature weights. Returns the count written, or CHESS_ERR_BUFFER if
+ * out_len is too small (needs >= 776). */
+CHESS_API int CHESS_CALL weights_snapshot(int* out, int out_len);
+
+/* Create / destroy a per-game training accumulator. Safe to destroy NULL. */
+CHESS_API TrainerHandle CHESS_CALL trainer_create(void);
+CHESS_API void          CHESS_CALL trainer_destroy(TrainerHandle trainer);
+
+/* Record one played position (post-move FEN) into the accumulator. */
+CHESS_API void CHESS_CALL trainer_record(TrainerHandle trainer, const char* fen);
+
+/* Apply a finished game's outcome to the global weights and save: rewards the winner's
+ * occupied squares / features and punishes the loser's, scaled by `weight` (e.g. 0.5 for a
+ * material-imbalance draw). winner: 0 = white, 1 = black. */
+CHESS_API void CHESS_CALL trainer_apply(TrainerHandle trainer, int winner, double weight);
 
 #ifdef __cplusplus
 }

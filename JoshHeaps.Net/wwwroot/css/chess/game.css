@@ -157,6 +157,47 @@
     pointer-events: none; /* ensures img doesn't steal the click */
 }
 
+#colorModal {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: #1e1e1e;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+    color: white;
+    z-index: 1000;
+    text-align: center;
+}
+
+#colorModal p {
+    margin-bottom: 15px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#colorButtonContainer {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+#colorButtonContainer button {
+    background-color: #2c2c2c;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    color: white;
+}
+
+#colorButtonContainer button:hover {
+    transform: scale(1.1);
+    background-color: #3a3a3a;
+}
+
 .chessSquare .coordinate-label {
     position: absolute;
     font-size: 1.2vw;

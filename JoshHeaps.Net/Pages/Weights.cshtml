@@ -1,0 +1,44 @@
+@page
+@model JoshHeaps.Net.Pages.WeightsModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Learned Weights";
+}
+
+<div id="weightsHeader">
+    <h1>Learned Piece-Square Weights</h1>
+    <p id="weightsStatus">Where the learned engine thinks each piece belongs.</p>
+    <div id="weightsControls">
+        <div class="heatLegend">
+            <span>low</span>
+            <span class="legendBar"></span>
+            <span>high</span>
+        </div>
+        <button id="refreshWeights" onclick="Weights.refresh()">Refresh</button>
+    </div>
+    <a id="backToWatch" href="/watch">← Watch / train</a>
+</div>
+
+<section class="weightsSection">
+    <h2>Feature weights</h2>
+    <p class="sectionHint">Learned value of each contextual feature (per normalized unit). Mobility is per piece type; passed pawns are endgame-weighted, king safety midgame-weighted.</p>
+    <div id="featureWeights" class="featurePanel"></div>
+</section>
+
+<section class="weightsSection">
+    <h2>Midgame tables</h2>
+    <div id="weightsGridMg" class="weightsGrid"></div>
+</section>
+
+<section class="weightsSection">
+    <h2>Endgame tables</h2>
+    <div id="weightsGridEg" class="weightsGrid"></div>
+</section>
+
+@section Scripts {
+    <script src="~/js/ChessScripts/Weights.js"></script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/chess/weights.css?v=@ViewData["cssVersion"]" />
+}

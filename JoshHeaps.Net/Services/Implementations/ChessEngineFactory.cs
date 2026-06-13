@@ -7,7 +7,10 @@ namespace JoshHeaps.Net.Services.Implementations;
 public enum ChessEngineKind
 {
     Stockfish,
-    Custom
+    Custom,
+
+    /// <summary>The custom engine with the reinforcement-learned piece-square evaluation.</summary>
+    CustomLearned
 }
 
 /// <summary>Configuration selecting which <see cref="IChessEngine"/> to use.</summary>
@@ -19,14 +22,19 @@ public sealed class ChessEngineOptions
 }
 
 /// <summary>Creates the configured <see cref="IChessEngine"/> per game.</summary>
-public sealed class ChessEngineFactory(IOptions<ChessEngineOptions> options) : IChessEngineFactory
+public sealed class ChessEngineFactory(
+    IOptions<ChessEngineOptions> options,
+    ILearnedWeightsStore weightsStore) : IChessEngineFactory
 {
     private readonly ChessEngineKind _kind = options.Value.Engine;
 
-    public IChessEngine Create(int skill) => _kind switch
+    public IChessEngine Create(int skill) => Create(skill, _kind);
+
+    public IChessEngine Create(int skill, ChessEngineKind kind) => kind switch
     {
         ChessEngineKind.Custom => new CustomChessEngine(skill),
+        ChessEngineKind.CustomLearned => new CustomChessEngine(skill, EngineVariant.Learned, weightsStore.WeightsFilePath),
         ChessEngineKind.Stockfish => new Stockfish(skill),
-        _ => throw new InvalidOperationException($"Unknown chess engine '{_kind}'.")
+        _ => throw new InvalidOperationException($"Unknown chess engine '{kind}'.")
     };
 }

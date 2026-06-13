@@ -20,10 +20,12 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <mutex>
 #include <new>
 #include <string>
@@ -76,10 +78,63 @@ static chess::Move tt_move (uint64_t d) { return chess::Move(static_cast<uint16_
 static int         tt_depth(uint64_t d) { return static_cast<int>(static_cast<uint8_t>(d >> 48)); }
 static Bound       tt_bound(uint64_t d) { return static_cast<Bound>(static_cast<uint8_t>(d >> 56)); }
 
-/* Internal engine state. One ChessEngine = one game. The table is NOT here: it is the
- * shared g_tt above. */
+/* Eval variant for an engine handle. CLASSIC = the hand-crafted evaluate(); LEARNED =
+ * material + learned phase-split piece-square tables + learned feature weights. */
+enum EvalVariant : int { EVAL_CLASSIC = 0, EVAL_LEARNED = 1 };
+
+/* The learned feature knobs (beyond the piece-square tables). Each has one weight learned
+ * from game outcomes; its activation is computed by compute_features(). Mobility is per
+ * piece type. Order is fixed — it is the on-disk and snapshot layout after the two tables. */
+enum Feature : int {
+    FEAT_MOB_N, FEAT_MOB_B, FEAT_MOB_R, FEAT_MOB_Q,   /* legal-move counts, per piece type */
+    FEAT_PASSED,                                       /* passed pawns, endgame-weighted     */
+    FEAT_ISOLATED,                                     /* isolated pawns                     */
+    FEAT_DOUBLED,                                       /* doubled pawns                      */
+    FEAT_KING,                                          /* king pawn-shelter, midgame-weighted */
+    FEATURE_NB
+};
+
+/* Per-handle eval configuration, snapshotted from the global learned weights at
+ * engine_create so the search reads a stable copy. The tables are white-relative: a black
+ * piece indexes the rank-mirrored square (sq ^ 56). `mg`/`eg` are blended by game phase.
+ * Indexed by chess::PieceType (PAWN..KING). Only consulted when variant == EVAL_LEARNED. */
+struct EvalParams {
+    int variant = EVAL_CLASSIC;
+    int mg[chess::PIECE_TYPE_NB][64] = {};
+    int eg[chess::PIECE_TYPE_NB][64] = {};
+    int featW[FEATURE_NB] = {};
+};
+
+/* Internal engine state. One ChessEngine = one game. The transposition table is NOT
+ * here: it is the shared g_tt above. */
 struct ChessEngine {
-    int skill = 20;          /* 1..20 from the UI; controls search depth */
+    int        skill = 20;   /* 1..20 from the UI; controls search depth */
+    EvalParams eval;         /* which evaluation the search uses, plus any learned weights */
+};
+
+/* The process-global learned weights: the single source of truth, loaded from disk once and
+ * updated in place by training. Engine handles snapshot it at creation; the visualization
+ * snapshots it on demand. Guarded by g_weightsMutex for updates/saves (eval reads its own
+ * per-handle copy, so it never touches this concurrently). */
+struct LearnedWeights {
+    int mg[chess::PIECE_TYPE_NB][64] = {};
+    int eg[chess::PIECE_TYPE_NB][64] = {};
+    int featW[FEATURE_NB] = {};
+};
+
+static LearnedWeights g_weights;
+static std::mutex     g_weightsMutex;
+static std::string    g_weightsPath;
+
+/* Per-game training accumulator (one per learned CPU-vs-CPU game). Records, per ply, where
+ * each side's pieces sat (split into midgame/endgame by phase) and each side's feature
+ * activations; trainer_apply turns the totals into weight nudges. Squares are white-relative
+ * (black indexes sq ^ 56), so a side's tally lines up with the shared white-relative table. */
+struct Trainer {
+    double mgOcc[chess::COLOR_NB][chess::PIECE_TYPE_NB][64] = {};
+    double egOcc[chess::COLOR_NB][chess::PIECE_TYPE_NB][64] = {};
+    double featAcc[chess::COLOR_NB][FEATURE_NB] = {};
+    int    plies = 0;
 };
 
 static int copy_out(const char* src, char* out_buf, int out_len) {
@@ -106,6 +161,48 @@ static int parse_skill(const char* options, int fallback) {
     if (!p) return fallback;
     int v = std::atoi(p + 6);
     return v < 1 ? 1 : v > 20 ? 20 : v;
+}
+
+/* "variant=learned" in the options selects the learned eval; anything else is classic. */
+static int parse_variant(const char* options) {
+    if (!options) return EVAL_CLASSIC;
+    const char* p = std::strstr(options, "variant=");
+    if (!p) return EVAL_CLASSIC;
+    return std::strncmp(p + 8, "learned", 7) == 0 ? EVAL_LEARNED : EVAL_CLASSIC;
+}
+
+/* On-disk format: 6*64 mg ints (PAWN..KING, squares 0..63), then 6*64 eg ints, then
+ * FEATURE_NB feature ints, whitespace-separated. A missing file or short read leaves the
+ * rest neutral (0), so an absent weights file just means "train from a blank slate".
+ * Caller holds g_weightsMutex. */
+static void load_global_weights(const char* path) {
+    g_weights = LearnedWeights{};                    /* reset to neutral before loading */
+
+    if (!path || !*path) return;
+    std::ifstream f(path);
+    if (!f) return;
+
+    for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+        for (int sq = 0; sq < 64; ++sq)
+            if (!(f >> g_weights.mg[pt][sq])) return;
+    for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+        for (int sq = 0; sq < 64; ++sq)
+            if (!(f >> g_weights.eg[pt][sq])) return;
+    for (int i = 0; i < FEATURE_NB; ++i)
+        if (!(f >> g_weights.featW[i])) return;
+}
+
+/* Persist g_weights to g_weightsPath in the format load_global_weights reads. Caller holds the lock. */
+static void save_global_weights() {
+    if (g_weightsPath.empty()) return;
+    std::ofstream f(g_weightsPath);
+    if (!f) return;
+
+    for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+        for (int sq = 0; sq < 64; ++sq) f << g_weights.mg[pt][sq] << (sq == 63 ? '\n' : ' ');
+    for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+        for (int sq = 0; sq < 64; ++sq) f << g_weights.eg[pt][sq] << (sq == 63 ? '\n' : ' ');
+    for (int i = 0; i < FEATURE_NB; ++i) f << g_weights.featW[i] << (i == FEATURE_NB - 1 ? '\n' : ' ');
 }
 
 /* Maps the 1..20 difficulty to a search depth. Kept modest: the search has no
@@ -208,14 +305,32 @@ static int evaluatePawn(const chess::Position& pos, const chess::Color c, const 
     return score;
 }
 
+static int piece_value(chess::PieceType pt) {
+    switch (pt) {
+    case chess::PAWN:   return 100;
+    case chess::KNIGHT: return 320;
+    case chess::BISHOP: return 330;
+    case chess::ROOK:   return 500;
+    case chess::QUEEN:  return 900;
+    default:            return 0;
+    }
+}
+
 static int castleIncentive(const chess::Position& pos, chess::Color c) {
-    if (!pos.pieces(chess::QUEEN))
-        return 0;
+    chess::Bitboard pcs = pos.pieces();
+    int total = 0;
+    while (pcs) {
+        chess::Square s = chess::pop_lsb(pcs);
+        chess::Piece pc = pos.piece_on(s);
+        chess::Color c = chess::color_of(pc);
+        total += piece_value(chess::type_of(pc));
+    }
+
     chess::Square k = pos.king_square(c);
     bool castled = (c == chess::WHITE) ? (k == chess::G1 || k == chess::C1)
         : (k == chess::G8 || k == chess::C8);
 
-    return castled ? 600 : 0;
+    return castled ? (total / 10) : 0;
 }
 
 static int evaluatePiece(const chess::Position& pos, const chess::Square& s, const chess::Piece& pc, const chess::Color& c) {
@@ -261,10 +376,136 @@ static int evaluate(const chess::Position& pos) {
     return score;
 }
 
+/* ---- Learned (phase-split tables + feature knobs) evaluation ---------------------------
+ * The model is a linear combination of features whose weights are learned from outcomes:
+ *   eval = Σ pieces [ material + blend(mg, eg, phase) ]  +  Σ features featW[i]·activation[i]
+ * compute_features() is the single source of feature activations, used by BOTH the eval here
+ * and the trainer, so the two can never disagree. Constants below are the only tunables. */
+
+/* Per-game-outcome learning rates and clamps. Squares accumulate occupancy (plies on a
+ * square, summed); features accumulate normalized per-ply activation (averaged, divided by a
+ * nominal scale so high-magnitude mobility doesn't dwarf the small pawn-structure terms). */
+static constexpr double SQUARE_LR  = 0.5;
+static constexpr int    SQ_CLAMP   = 250;
+static constexpr double FEAT_LR    = 2.0;
+static constexpr int    FEAT_CLAMP = 500;
+static constexpr double FEAT_SCALE[FEATURE_NB] = { 4, 6, 8, 14, 2, 1, 1, 2 };
+
+/* Game phase in [0,1] from remaining non-pawn material (PeSTO weights N=B=1, R=2, Q=4; max
+ * 24 for both full sides): 0 = opening, 1 = bare kings. Drives the mg/eg table blend and
+ * the phase weighting of the passed-pawn (×phase) and king-safety (×(1−phase)) features. */
+static double game_phase(const chess::Position& pos) {
+    int npm = chess::popcount(pos.pieces(chess::KNIGHT)) * 1
+            + chess::popcount(pos.pieces(chess::BISHOP)) * 1
+            + chess::popcount(pos.pieces(chess::ROOK))   * 2
+            + chess::popcount(pos.pieces(chess::QUEEN))  * 4;
+    constexpr int MAX = 24;
+    if (npm >= MAX) return 0.0;
+    return double(MAX - npm) / MAX;
+}
+
+/* Blend a midgame and endgame value by phase, rounding per-piece (so training credits a
+ * square the same way the eval reads it). */
+static int blend(int mg, int eg, double phase) {
+    return int(std::lround((1.0 - phase) * mg + phase * eg));
+}
+
+/* Fills `out[FEATURE_NB]` with one color's raw feature activations for a position. The piece-
+ * square tables handle "where pieces belong"; these capture context a static table can't:
+ * legal mobility (per piece type, so pins reduce it), passed pawns (endgame-weighted), pawn
+ * structure, and king shelter (midgame-weighted). Ported nowhere — this is the only copy. */
+static void compute_features(chess::Position& pos, chess::Color c, double phase, double out[FEATURE_NB]) {
+    for (int i = 0; i < FEATURE_NB; ++i) out[i] = 0.0;
+
+    /* Mobility: legal moves for color c, bucketed by the moving piece's type. */
+    chess::MoveList moves;
+    pos.generate_legal_for(c, moves);
+    for (int i = 0; i < moves.size(); ++i) {
+        switch (chess::type_of(pos.piece_on(moves.moves[i].from()))) {
+            case chess::KNIGHT: out[FEAT_MOB_N] += 1; break;
+            case chess::BISHOP: out[FEAT_MOB_B] += 1; break;
+            case chess::ROOK:   out[FEAT_MOB_R] += 1; break;
+            case chess::QUEEN:  out[FEAT_MOB_Q] += 1; break;
+            default: break;
+        }
+    }
+
+    /* Pawn structure. */
+    chess::Bitboard pawns = pos.pieces(c, chess::PAWN);
+    chess::Bitboard bb = pawns;
+    while (bb) {
+        chess::Square s = chess::pop_lsb(bb);
+
+        if (!(front_span(c, s) & pos.pieces(~c, chess::PAWN))) {          /* passed */
+            chess::Rank r = chess::rank_of(s);
+            int toPromotion = (c == chess::WHITE) ? (chess::RANK_8 - r) : (r - chess::RANK_1);
+            out[FEAT_PASSED] += (6 - toPromotion) * phase;               /* 0..5 ranks advanced, late-game */
+        }
+        if (front_span_file_only(c, s) & pawns)                          /* doubled (friendly pawn ahead) */
+            out[FEAT_DOUBLED] += 1;
+
+        chess::File f = chess::file_of(s);
+        chess::Bitboard adjacent = 0;
+        if (f > chess::FILE_A) adjacent |= chess::file_bb(chess::File(f - 1));
+        if (f < chess::FILE_H) adjacent |= chess::file_bb(chess::File(f + 1));
+        if (!(adjacent & pawns))                                          /* isolated */
+            out[FEAT_ISOLATED] += 1;
+    }
+
+    /* King safety: friendly pawns sheltering the king (its file + adjacent files, the two
+     * ranks in front), worth more in the midgame. */
+    chess::Square k = pos.king_square(c);
+    chess::File kf = chess::file_of(k);
+    chess::Rank kr = chess::rank_of(k);
+    chess::Bitboard kingFiles = chess::file_bb(kf);
+    if (kf > chess::FILE_A) kingFiles |= chess::file_bb(chess::File(kf - 1));
+    if (kf < chess::FILE_H) kingFiles |= chess::file_bb(chess::File(kf + 1));
+    chess::Bitboard shelterRanks = 0;
+    for (int d = 1; d <= 2; ++d) {
+        int rr = (c == chess::WHITE) ? (kr + d) : (kr - d);
+        if (rr >= 0 && rr <= 7) shelterRanks |= (0xFFULL << (8 * rr));
+    }
+    out[FEAT_KING] += chess::popcount(kingFiles & shelterRanks & pawns) * (1.0 - phase);
+}
+
+/* Learned eval (white-positive/absolute, like evaluate()): material + phase-blended piece-
+ * square tables + learned feature weights. Black pieces index the rank-mirrored square
+ * (s ^ 56) so both colors share one white-relative table. Non-const because mobility
+ * generates legal moves (which the position's move generator does via do/undo). */
+static int evaluateLearned(chess::Position& pos, const EvalParams& ep) {
+    double phase = game_phase(pos);
+    int score = 0;
+
+    chess::Bitboard white = pos.pieces(chess::WHITE);
+    while (white) {
+        chess::Square s = chess::pop_lsb(white);
+        chess::PieceType pt = chess::type_of(pos.piece_on(s));
+        score += piece_value(pt) + blend(ep.mg[pt][s], ep.eg[pt][s], phase);
+    }
+
+    chess::Bitboard black = pos.pieces(chess::BLACK);
+    while (black) {
+        chess::Square s = chess::pop_lsb(black);
+        chess::PieceType pt = chess::type_of(pos.piece_on(s));
+        score -= piece_value(pt) + blend(ep.mg[pt][s ^ 56], ep.eg[pt][s ^ 56], phase);
+    }
+
+    double wFeat[FEATURE_NB], bFeat[FEATURE_NB];
+    compute_features(pos, chess::WHITE, phase, wFeat);
+    compute_features(pos, chess::BLACK, phase, bFeat);
+
+    double feature = 0.0;
+    for (int i = 0; i < FEATURE_NB; ++i)
+        feature += ep.featW[i] * (wFeat[i] - bFeat[i]) / FEAT_SCALE[i];
+    score += int(std::lround(feature));
+
+    return score;
+}
+
 /* evaluate() is white-positive (absolute). Negamax needs it relative to the side to
  * move, so flip the sign when black is to move. */
-static int evaluate_stm(const chess::Position& pos, bool whiteToMove) {
-    int s = evaluate(pos);
+static int evaluate_stm(chess::Position& pos, bool whiteToMove, const EvalParams& ep) {
+    int s = (ep.variant == EVAL_LEARNED) ? evaluateLearned(pos, ep) : evaluate(pos);
     return whiteToMove ? s : -s;
 }
 
@@ -273,17 +514,6 @@ static int evaluate_stm(const chess::Position& pos, bool whiteToMove) {
  * Non-mate scores pass through untouched. */
 static int score_to_tt(int s, int ply)   { return s >=  MATE_BOUND ? s + ply : s <= -MATE_BOUND ? s - ply : s; }
 static int score_from_tt(int s, int ply) { return s >=  MATE_BOUND ? s - ply : s <= -MATE_BOUND ? s + ply : s; }
-
-static int piece_value(chess::PieceType pt) {
-    switch (pt) {
-        case chess::PAWN:   return 100;
-        case chess::KNIGHT: return 320;
-        case chess::BISHOP: return 330;
-        case chess::ROOK:   return 500;
-        case chess::QUEEN:  return 900;
-        default:            return 0;
-    }
-}
 
 /* Heuristic for searching the most promising moves first, which makes alpha-beta prune far
  * more. Bands, highest first: the TT best move, then captures by MVV-LVA (most valuable
@@ -351,6 +581,15 @@ CHESS_API EngineHandle CHESS_CALL engine_create(const char* options) {
     auto* e = new (std::nothrow) ChessEngine();
     if (!e) return nullptr;
     e->skill = parse_skill(options, e->skill);
+    e->eval.variant = parse_variant(options);
+    if (e->eval.variant == EVAL_LEARNED) {
+        /* Snapshot the current global weights so the search reads a stable copy (training
+         * updates the global between games; the weights path is owned by learned_load). */
+        std::lock_guard<std::mutex> lock(g_weightsMutex);
+        std::memcpy(e->eval.mg,    g_weights.mg,    sizeof e->eval.mg);
+        std::memcpy(e->eval.eg,    g_weights.eg,    sizeof e->eval.eg);
+        std::memcpy(e->eval.featW, g_weights.featW, sizeof e->eval.featW);
+    }
     return e;
 }
 
@@ -369,8 +608,9 @@ CHESS_API int CHESS_CALL engine_set_option(EngineHandle engine,
 static constexpr int MAX_PLY = 128;            /* ply never exceeds maxDepth (<= 20) */
 
 struct SearchContext {
-    uint64_t    nodes = 0;
-    chess::Move killers[MAX_PLY][2] = {};      /* [ply][slot]; MOVE_NONE until filled */
+    uint64_t          nodes = 0;
+    const EvalParams* eval  = nullptr;         /* eval config for this search; set by engine_best_move */
+    chess::Move       killers[MAX_PLY][2] = {};/* [ply][slot]; MOVE_NONE until filled */
 };
 
 /* Negamax alpha-beta over the shared transposition table. `maxDepth` is the searching
@@ -387,7 +627,7 @@ static int negamax(chess::Position& pos, int maxDepth, int depth, int ply,
         return 0;
 
     if (depth <= 0)
-        return evaluate_stm(pos, whiteToMove);
+        return evaluate_stm(pos, whiteToMove, *ctx.eval);
 
     const uint64_t key  = pos.key();
     TTEntry&       slot = g_tt.entries[key & g_tt.mask];
@@ -502,6 +742,7 @@ CHESS_API int CHESS_CALL engine_best_move(EngineHandle engine,
         return CHESS_ERR_NO_MOVE;
 
     SearchContext ctx;
+    ctx.eval = &engine->eval;
     int maxDepth = depth_for_skill(engine->skill);
     chess::Move bestMove = moves.moves[0];            /* guaranteed-legal fallback */
 
@@ -545,6 +786,102 @@ CHESS_API int CHESS_CALL engine_version(char* out_buf, int out_len) {
 
 CHESS_API void CHESS_CALL engine_destroy(EngineHandle engine) {
     delete engine;                                        /* delete nullptr is safe */
+}
+
+/* ---- Learned-weights / training C ABI --------------------------------------------------
+ * The managed side orchestrates games but owns no chess logic: it tells the engine where
+ * to load/save the global weights, records each played position, and applies the result. */
+
+CHESS_API void CHESS_CALL learned_load(const char* path) {
+    std::lock_guard<std::mutex> lock(g_weightsMutex);
+    g_weightsPath = path ? path : "";
+    load_global_weights(path);
+}
+
+CHESS_API int CHESS_CALL weights_snapshot(int* out, int out_len) {
+    const int need = 6 * 64 * 2 + FEATURE_NB;     /* mg + eg (PAWN..KING) + features = 776 */
+    if (!out || out_len < need) return CHESS_ERR_BUFFER;
+
+    std::lock_guard<std::mutex> lock(g_weightsMutex);
+    int n = 0;
+    for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+        for (int sq = 0; sq < 64; ++sq) out[n++] = g_weights.mg[pt][sq];
+    for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+        for (int sq = 0; sq < 64; ++sq) out[n++] = g_weights.eg[pt][sq];
+    for (int i = 0; i < FEATURE_NB; ++i) out[n++] = g_weights.featW[i];
+    return n;
+}
+
+CHESS_API TrainerHandle CHESS_CALL trainer_create(void) {
+    return new (std::nothrow) Trainer();
+}
+
+CHESS_API void CHESS_CALL trainer_record(TrainerHandle t, const char* fen) {
+    if (!t || !fen || !*fen) return;
+    ensure_initialized();
+
+    chess::Position pos = chess::Position::from_fen(fen);
+    double phase = game_phase(pos);
+
+    /* Per-square occupancy, split into midgame/endgame by phase, white-relative. */
+    chess::Bitboard occ = pos.pieces();
+    while (occ) {
+        chess::Square s  = chess::pop_lsb(occ);
+        chess::Piece  pc = pos.piece_on(s);
+        chess::Color  c  = chess::color_of(pc);
+        chess::PieceType pt = chess::type_of(pc);
+        int relSq = (c == chess::WHITE) ? int(s) : (int(s) ^ 56);
+        t->mgOcc[c][pt][relSq] += (1.0 - phase);
+        t->egOcc[c][pt][relSq] += phase;
+    }
+
+    /* Per-side feature activations. */
+    double w[FEATURE_NB], b[FEATURE_NB];
+    compute_features(pos, chess::WHITE, phase, w);
+    compute_features(pos, chess::BLACK, phase, b);
+    for (int i = 0; i < FEATURE_NB; ++i) {
+        t->featAcc[chess::WHITE][i] += w[i];
+        t->featAcc[chess::BLACK][i] += b[i];
+    }
+
+    t->plies++;
+}
+
+CHESS_API void CHESS_CALL trainer_apply(TrainerHandle t, int winner, double weight) {
+    if (!t) return;
+
+    std::lock_guard<std::mutex> lock(g_weightsMutex);
+
+    /* pass 0 = winner (reward, +1); pass 1 = loser (punish, -1). */
+    for (int pass = 0; pass < 2; ++pass) {
+        chess::Color side = chess::Color((pass == 0 ? winner : (winner ^ 1)) & 1);
+        int sign = pass == 0 ? 1 : -1;
+
+        for (int pt = chess::PAWN; pt <= chess::KING; ++pt)
+            for (int sq = 0; sq < 64; ++sq) {
+                if (t->mgOcc[side][pt][sq] != 0.0) {
+                    int d = sign * int(std::lround(SQUARE_LR * t->mgOcc[side][pt][sq] * weight));
+                    g_weights.mg[pt][sq] = std::clamp(g_weights.mg[pt][sq] + d, -SQ_CLAMP, SQ_CLAMP);
+                }
+                if (t->egOcc[side][pt][sq] != 0.0) {
+                    int d = sign * int(std::lround(SQUARE_LR * t->egOcc[side][pt][sq] * weight));
+                    g_weights.eg[pt][sq] = std::clamp(g_weights.eg[pt][sq] + d, -SQ_CLAMP, SQ_CLAMP);
+                }
+            }
+
+        if (t->plies > 0)
+            for (int i = 0; i < FEATURE_NB; ++i) {
+                double avg = t->featAcc[side][i] / t->plies;        /* per-ply average, normalized */
+                int d = sign * int(std::lround(FEAT_LR * (avg / FEAT_SCALE[i]) * weight));
+                g_weights.featW[i] = std::clamp(g_weights.featW[i] + d, -FEAT_CLAMP, FEAT_CLAMP);
+            }
+    }
+
+    save_global_weights();
+}
+
+CHESS_API void CHESS_CALL trainer_destroy(TrainerHandle t) {
+    delete t;                                             /* delete nullptr is safe */
 }
 
 } /* extern "C" */

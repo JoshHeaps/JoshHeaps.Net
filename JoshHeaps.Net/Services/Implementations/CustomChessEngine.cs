@@ -5,6 +5,16 @@ using System.Runtime.InteropServices;
 
 namespace JoshHeaps.Net.Services.Implementations;
 
+/// <summary>Which evaluation the native engine uses.</summary>
+public enum EngineVariant
+{
+    /// <summary>The hand-crafted evaluation.</summary>
+    Classic,
+
+    /// <summary>Material plus a learned per-square bonus table loaded from a weights file.</summary>
+    Learned
+}
+
 /// <summary>
 /// Middleman wrapper over the native custom chess engine (chess_engine.dll / libchess_engine.so).
 /// Shares <see cref="IChessEngine"/> with <see cref="Stockfish"/> so the two are swappable.
@@ -16,11 +26,17 @@ public sealed partial class CustomChessEngine : IChessEngine
 
     public int Skill { get; }
 
-    public CustomChessEngine(int skill = 20)
+    public CustomChessEngine(int skill = 20, EngineVariant variant = EngineVariant.Classic, string? weightsPath = null)
     {
         Skill = skill;
 
-        var handle = NativeMethods.engine_create($"skill={skill}");
+        // weights= must come last: the native side reads the path as the rest of the
+        // string, which lets it contain ';' and spaces.
+        var options = variant == EngineVariant.Learned
+            ? $"skill={skill};variant=learned;weights={weightsPath}"
+            : $"skill={skill}";
+
+        var handle = NativeMethods.engine_create(options);
 
         if (handle == IntPtr.Zero)
             throw new InvalidOperationException("Native chess engine failed to initialize (engine_create returned null).");
@@ -79,8 +95,9 @@ public sealed partial class CustomChessEngine : IChessEngine
     /// <summary>
     /// P/Invoke surface for chess_engine.(dll|so). The resolver maps the logical name
     /// "chess_engine" to the platform binary in the Resources folder (mirrors Stockfish).
+    /// Internal so <see cref="LearnedWeightsStore"/> can share the single import resolver.
     /// </summary>
-    private static partial class NativeMethods
+    internal static partial class NativeMethods
     {
         private const string LibName = "chess_engine";
 
@@ -115,5 +132,31 @@ public sealed partial class CustomChessEngine : IChessEngine
         [LibraryImport(LibName)]
         [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
         internal static partial void engine_destroy(IntPtr engine);
+
+        // ---- Learned-weights / training ABI (see chess_engine.h) ----
+
+        [LibraryImport(LibName, StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static partial void learned_load(string path);
+
+        [LibraryImport(LibName)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static unsafe partial int weights_snapshot(int* outBuf, int outLen);
+
+        [LibraryImport(LibName)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static partial IntPtr trainer_create();
+
+        [LibraryImport(LibName, StringMarshalling = StringMarshalling.Utf8)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static partial void trainer_record(IntPtr trainer, string fen);
+
+        [LibraryImport(LibName)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static partial void trainer_apply(IntPtr trainer, int winner, double weight);
+
+        [LibraryImport(LibName)]
+        [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
+        internal static partial void trainer_destroy(IntPtr trainer);
     }
 }
