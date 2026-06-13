@@ -13,7 +13,7 @@ public sealed class LearnedWeightsStore : ILearnedWeightsStore
 {
     private const int Pieces = 6;       // Pawn..King
     private const int Squares = 64;
-    private const int Features = 8;     // mobility N/B/R/Q, passed, isolated, doubled, king safety
+    private const int Features = 7;     // mobility N/B/R/Q, passed, pawn links, king safety
 
     public string WeightsFilePath { get; }
 

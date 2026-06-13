@@ -8,6 +8,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Shared library: chess_engine.dll (Windows) / libchess_engine.so (Linux).
 add_library(chess_engine SHARED
     src/chess_engine.cpp
+    src/eval.cpp
+    src/search.cpp
+    src/learned_model.cpp
     src/bitboard.cpp
     src/zobrist.cpp
     src/position.cpp

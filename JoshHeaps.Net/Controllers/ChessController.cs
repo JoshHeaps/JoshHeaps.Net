@@ -212,7 +212,7 @@ public class ChessController(
     public ActionResult GetLearnedWeights()
     {
         var names = new[] { "Pawn", "Knight", "Bishop", "Rook", "Queen", "King" };
-        var featureNames = new[] { "Mobility N", "Mobility B", "Mobility R", "Mobility Q", "Passed", "Isolated", "Doubled", "King safety" };
+        var featureNames = new[] { "Mobility N", "Mobility B", "Mobility R", "Mobility Q", "Passed", "Pawn links", "King safety" };
 
         var snapshot = weightsStore.Snapshot();
 
