@@ -23,6 +23,7 @@ builder.Services.AddSingleton<IChessService, ChessService>();
 builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
 
 builder.Services.Configure<ChessEngineOptions>(configuration.GetSection(ChessEngineOptions.SectionName));
+builder.Services.AddSingleton<ILearnedWeightsStore, LearnedWeightsStore>();
 builder.Services.AddSingleton<IChessEngineFactory, ChessEngineFactory>();
 builder.Services.AddSingleton<IComputerMoveOrchestrator, ComputerMoveOrchestrator>();
 

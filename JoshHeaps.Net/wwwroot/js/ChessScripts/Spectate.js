@@ -27,10 +27,15 @@ const Spectate = {
     },
 
     async startCpuGame() {
-        const difficulty = document.getElementById("cpuDifficulty").value;
+        const params = new URLSearchParams({
+            whiteEngine: document.getElementById("whiteEngine").value,
+            whiteSkill: document.getElementById("whiteSkill").value,
+            blackEngine: document.getElementById("blackEngine").value,
+            blackSkill: document.getElementById("blackSkill").value
+        });
 
         try {
-            await fetch(`/api/chess/watch/cpu/${difficulty}`);
+            await fetch(`/api/chess/watch/cpu?${params}`);
             await this.refreshGames();
         } catch (err) {
             console.error("❌ Could not start CPU vs CPU game.", err);
@@ -68,7 +73,9 @@ const Spectate = {
     async addGame(game) {
         this.games.set(game.gameId, {
             isVsComputer: game.isVsComputer,
-            isComputerVsComputer: game.isComputerVsComputer
+            isComputerVsComputer: game.isComputerVsComputer,
+            whiteEngine: game.whiteEngine,
+            blackEngine: game.blackEngine
         });
 
         const card = document.createElement("div");
@@ -183,9 +190,19 @@ const Spectate = {
     },
 
     gameLabel(stored) {
-        if (stored.isComputerVsComputer) return "CPU vs CPU";
+        if (stored.isComputerVsComputer)
+            return `${this.engineName(stored.whiteEngine)} (W) vs ${this.engineName(stored.blackEngine)} (B)`;
         if (stored.isVsComputer) return "Vs CPU";
         return "Player vs Player";
+    },
+
+    engineName(kind) {
+        switch (kind) {
+            case "CustomLearned": return "Learned";
+            case "Custom": return "Custom";
+            case "Stockfish": return "Stockfish";
+            default: return kind || "CPU";
+        }
     },
 
     headerText(stored, currentPlayer, moveCount, isCheck) {

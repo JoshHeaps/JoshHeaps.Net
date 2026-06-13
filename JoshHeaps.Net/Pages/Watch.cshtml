@@ -9,16 +9,38 @@
     <h1>Live Chess</h1>
     <p id="watchStatus">Loading games…</p>
     <div id="watchControls">
-        <label for="cpuDifficulty">Difficulty</label>
-        <select id="cpuDifficulty">
-            @for (int i = 1; i <= 20; i++)
-            {
-                <option value="@i" @(i == 4 ? "selected" : "")>@i</option>
-            }
-        </select>
+        <fieldset class="enginePicker">
+            <legend>White</legend>
+            <select id="whiteEngine">
+                <option value="custom">Custom (v1)</option>
+                <option value="customLearned" selected>Custom (Learned)</option>
+                <option value="stockfish">Stockfish</option>
+            </select>
+            <select id="whiteSkill">
+                @for (int i = 1; i <= 20; i++)
+                {
+                    <option value="@i" @(i == 4 ? "selected" : "")>@i</option>
+                }
+            </select>
+        </fieldset>
+        <fieldset class="enginePicker">
+            <legend>Black</legend>
+            <select id="blackEngine">
+                <option value="custom" selected>Custom (v1)</option>
+                <option value="customLearned">Custom (Learned)</option>
+                <option value="stockfish">Stockfish</option>
+            </select>
+            <select id="blackSkill">
+                @for (int i = 1; i <= 20; i++)
+                {
+                    <option value="@i" @(i == 4 ? "selected" : "")>@i</option>
+                }
+            </select>
+        </fieldset>
         <button id="startCpuVsCpu" onclick="Spectate.startCpuGame()">Watch CPU vs CPU</button>
     </div>
     <a id="backToPlay" href="/chess">← Play a game</a>
+    <a id="viewWeights" href="/weights">View learned weights →</a>
 </div>
 
 <div id="gamesFeed"></div>

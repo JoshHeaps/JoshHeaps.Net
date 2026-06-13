@@ -47,6 +47,22 @@ public:
     void do_move(Move m);
     void undo_move(Move m);
 
+    // Legal moves for a SPECIFIED color (for mobility eval of either side). When c is not
+    // the side to move, temporarily flips side-to-move (and clears the en-passant square,
+    // which belongs to the other side) so generate_legal runs for c, then restores. The
+    // Zobrist key is untouched and unused by move generation, so this leaves the position
+    // observably unchanged.
+    void generate_legal_for(Color c, MoveList& list) {
+        if (sideToMove == c) { generate_legal(list); return; }
+        Color  savedSide = sideToMove;
+        Square savedEp    = epSquare;
+        sideToMove = c;
+        epSquare   = SQ_NONE;
+        generate_legal(list);
+        sideToMove = savedSide;
+        epSquare   = savedEp;
+    }
+
     // Seed prior-position keys (oldest first, excluding the current position) so
     // is_draw() can see game history the FEN doesn't carry. Call once, right after
     // from_fen and before any do_move.

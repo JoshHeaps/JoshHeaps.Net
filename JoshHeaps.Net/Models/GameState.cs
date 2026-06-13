@@ -1,4 +1,5 @@
-﻿using JoshHeaps.Net.Services.Interfaces;
+﻿using JoshHeaps.Net.Services.Implementations;
+using JoshHeaps.Net.Services.Interfaces;
 
 namespace JoshHeaps.Net.Models;
 
@@ -59,7 +60,20 @@ public class GameState
     public bool IsVsComputer { get; set; } = false;
     public bool IsComputerVsComputer { get; set; } = false;
 
-    public IChessEngine? Computer { get; set; }
+    // The engine playing each side (null for a human). In a human-vs-computer game only the
+    // computer's side is set; the orchestrator picks the engine for whoever is to move.
+    public IChessEngine? WhiteComputer { get; set; }
+    public IChessEngine? BlackComputer { get; set; }
+
+    // Which engine implementation each side uses — lets game-over handling know which side(s)
+    // are the learning engine, and lets spectators see who is playing.
+    public ChessEngineKind WhiteEngineKind { get; set; }
+    public ChessEngineKind BlackEngineKind { get; set; }
+
+    // Native per-game training accumulator (nint.Zero when this game isn't training the
+    // learned engine). The engine records each played position into it and applies the
+    // result on game over.
+    public nint Trainer { get; set; }
 
     // optional: convenience
     public bool IsOpen => !WhiteJoined || !BlackJoined;
