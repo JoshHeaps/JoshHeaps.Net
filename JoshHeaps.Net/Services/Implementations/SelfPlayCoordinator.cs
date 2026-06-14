@@ -18,6 +18,10 @@ public sealed class SelfPlayCoordinator(
     private static readonly TimeSpan _selfPlayMoveDelay = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan _selfPlayResultTimeout = TimeSpan.FromSeconds(30);
 
+    // Abort a game if a single engine move takes longer than this — a stopgap for engines
+    // (usually Stockfish) that occasionally freeze and would otherwise hang the game.
+    private static readonly TimeSpan _moveTimeout = TimeSpan.FromSeconds(60);
+
     // Plies of random legal moves at the start of a training game, so self-play and
     // engine-vs-engine games explore different lines instead of replaying one game.
     private const int _openingRandomPlies = 4;
@@ -61,11 +65,13 @@ public sealed class SelfPlayCoordinator(
     }
 
     /// <summary>
-    /// Drives the game to completion, then trains from it. Never throws — a failure just ends
-    /// the game (and the trainer is always freed), so callers can safely await or ignore it.
+    /// Drives the game to completion, then trains from it. Never throws — a failure (or a frozen
+    /// engine) just ends the game and the trainer is always freed, so callers can await or ignore.
     /// </summary>
     private async Task RunAsync(GameState gameState, CancellationToken cancellationToken)
     {
+        bool aborted = false;
+
         try
         {
             // Give spectators a moment to join the SignalR group before the first move.
@@ -81,21 +87,48 @@ public sealed class SelfPlayCoordinator(
 
             while (IsLive(gameState, cancellationToken))
             {
-                await orchestrator.PlayAsync(gameState);
+                await PlayMoveWithTimeoutAsync(gameState, cancellationToken);
                 await Task.Delay(_selfPlayMoveDelay, cancellationToken);
             }
         }
-        catch (OperationCanceledException) { /* service shutting down */ }
+        catch (OperationCanceledException) { aborted = true; /* service shutting down */ }
+        catch (TimeoutException)
+        {
+            aborted = true;
+            Console.WriteLine($"Self-play game {gameState.GameId} aborted: a move took over " +
+                              $"{_moveTimeout.TotalSeconds:n0}s (likely a frozen engine).");
+        }
         catch (Exception ex)
         {
+            aborted = true;
             Console.WriteLine($"Self-play game {gameState.GameId} stopped: {ex.Message}");
         }
 
         ApplyLearning(gameState);
 
-        // Leave the finished game in place briefly so spectators can see the result.
+        // A clean finish lingers briefly so spectators see the result; an aborted/hung game is
+        // torn down immediately so its engines (and any frozen Stockfish process) are released.
         if (gameStore.Contains(gameState.GameId))
-            gameStore.ScheduleRemove(gameState.GameId, _selfPlayResultTimeout);
+            gameStore.ScheduleRemove(gameState.GameId, aborted ? TimeSpan.Zero : _selfPlayResultTimeout);
+    }
+
+    /// <summary>
+    /// Plays one engine move, abandoning it if it exceeds <see cref="_moveTimeout"/> (throwing
+    /// <see cref="TimeoutException"/>). The abandoned move's eventual fault — it errors once the
+    /// game's engines are disposed — is observed so it isn't an unobserved task exception.
+    /// </summary>
+    private async Task PlayMoveWithTimeoutAsync(GameState gameState, CancellationToken cancellationToken)
+    {
+        var play = orchestrator.PlayAsync(gameState);
+        try
+        {
+            await play.WaitAsync(_moveTimeout, cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            _ = play.ContinueWith(static t => { _ = t.Exception; }, TaskScheduler.Default);
+            throw;
+        }
     }
 
     private bool IsLive(GameState gameState, CancellationToken cancellationToken) =>

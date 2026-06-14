@@ -28,6 +28,7 @@ builder.Services.AddSingleton<IChessEngineFactory, ChessEngineFactory>();
 builder.Services.AddSingleton<IComputerMoveOrchestrator, ComputerMoveOrchestrator>();
 builder.Services.AddSingleton<IGameStore, GameStore>();
 builder.Services.AddSingleton<ISelfPlayCoordinator, SelfPlayCoordinator>();
+builder.Services.AddSingleton<AutoTrainingSettings>();
 
 if (!builder.Environment.IsDevelopment())
 {

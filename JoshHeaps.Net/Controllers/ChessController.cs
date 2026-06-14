@@ -17,6 +17,7 @@ public class ChessController(
     ILearnedWeightsStore weightsStore,
     IGameStore gameStore,
     ISelfPlayCoordinator selfPlay,
+    AutoTrainingSettings autoTraining,
     IHubContext<ChessHub> chessHub) : ControllerBase
 {
     private static readonly TimeSpan _computerGameTimeout = TimeSpan.FromHours(1);
@@ -105,6 +106,25 @@ public class ChessController(
         "customlearned" or "learned" => ChessEngineKind.CustomLearned,
         _ => ChessEngineKind.Custom
     };
+
+    /// <summary>
+    /// Current number of background auto-training games (and the allowed maximum). Auto-training
+    /// itself runs only outside Development; this reflects the target the service is keeping.
+    /// </summary>
+    [HttpGet("autotrain")]
+    public ActionResult GetAutoTrain() =>
+        Ok(new { count = autoTraining.GameCount, max = AutoTrainingSettings.MaxGames });
+
+    /// <summary>
+    /// Set how many auto-training games run concurrently (clamped to 0..max; 0 pauses training).
+    /// Takes effect live — the background service tops up or drains toward the new count.
+    /// </summary>
+    [HttpPost("autotrain")]
+    public ActionResult SetAutoTrain([FromQuery] int count)
+    {
+        autoTraining.GameCount = count;   // clamped inside the setter
+        return Ok(new { count = autoTraining.GameCount, max = AutoTrainingSettings.MaxGames });
+    }
 
     /// <summary>
     /// Joins the "pool" of chess players.
