@@ -274,34 +274,42 @@ const Spectate = {
 
         if (!card) return;
 
-        let banner = card.querySelector(".gameResult");
+        // The result and Copy PGN button live in an overlay anchored over the board so showing
+        // them at game end never changes the card's height (which would shift the whole grid).
+        let overlay = card.querySelector(".gameOverlay");
 
         if (!text) {
-            banner?.remove();
-            card.querySelector(".copyPgnBtn")?.remove();
+            overlay?.remove();
             card.classList.remove("over");
             return;
         }
 
-        if (!banner) {
-            banner = document.createElement("div");
+        if (!overlay) {
+            overlay = document.createElement("div");
+            overlay.className = "gameOverlay";
+
+            const banner = document.createElement("div");
             banner.className = "gameResult";
-            card.appendChild(banner);
+            overlay.appendChild(banner);
+
+            card.appendChild(overlay);
         }
 
-        banner.textContent = text;
+        overlay.querySelector(".gameResult").textContent = text;
         card.classList.add("over");
         this.addCopyPgn(gameId, card);
     },
 
     addCopyPgn(gameId, card) {
-        if (card.querySelector(".copyPgnBtn")) return;
+        const overlay = card.querySelector(".gameOverlay");
+
+        if (!overlay || overlay.querySelector(".copyPgnBtn")) return;
 
         const btn = document.createElement("button");
         btn.className = "copyPgnBtn";
         btn.textContent = "Copy PGN";
         btn.onclick = (event) => { event.stopPropagation(); this.copyPgn(gameId); };
-        card.appendChild(btn);
+        overlay.appendChild(btn);
 
         // Prefetch now (while the game is still in memory) so copy works during the
         // brief window before the finished game is cleaned up.
