@@ -87,10 +87,12 @@ static void save_global_weights();   /* defined below; load rewrites stale files
 static void load_global_weights(const char* path) {
     WinCounters loaded{};
     bool ok = false;
+    bool fileExisted = false;
 
     if (path && *path) {
         std::ifstream f(path);
         if (f) {
+            fileExisted = true;
             int version = 0;
             if ((f >> version) && version == LEARNED_VERSION) {
                 auto readTable = [&](double t[chess::PIECE_TYPE_NB][64]) -> bool {
@@ -110,9 +112,12 @@ static void load_global_weights(const char* path) {
     g_counts = ok ? loaded : WinCounters{};
     recompute_weights();
 
-    /* Stale / wrong-version / unreadable: wipe the file's contents (keep the file) by
-     * rewriting it blank-but-versioned, so the next load matches and we never reread garbage. */
-    if (!ok)
+    /* Only create a fresh file when none exists yet (first run): write it blank-but-versioned
+     * so there's a valid target to persist into. If a file IS present but couldn't be parsed
+     * (old format, corrupt, or a partial write), leave its bytes untouched — never destroy
+     * accumulated training data on startup. We just play from neutral weights this session;
+     * the next training apply() overwrites the file with a clean, current-format save. */
+    if (!ok && !fileExisted)
         save_global_weights();
 }
 
