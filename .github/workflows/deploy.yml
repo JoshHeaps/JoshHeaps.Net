@@ -63,7 +63,10 @@ jobs:
 
       - name: Rsync to server
         run: |
-          rsync -az --delete -e "ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_rsa" \
+          # --exclude chess-data: never let --delete remove the learned-engine training
+          # data, which lives in the deploy dir unless ChessEngine__WeightsPath is set
+          # elsewhere. publish/ never contains it, so without this --delete wipes it every deploy.
+          rsync -az --delete --exclude 'chess-data' -e "ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_rsa" \
             publish/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/
 
       - name: Reload and restart service
