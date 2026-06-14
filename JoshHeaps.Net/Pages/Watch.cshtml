@@ -38,6 +38,11 @@
             </select>
         </fieldset>
         <button id="startCpuVsCpu" onclick="Spectate.startCpuGame()">Watch CPU vs CPU</button>
+        <fieldset class="enginePicker">
+            <legend>Auto-train games</legend>
+            <input id="autoTrainCount" type="number" min="0" max="16" step="1" />
+            <button id="applyAutoTrain" onclick="Spectate.setAutoTrainCount()">Apply</button>
+        </fieldset>
     </div>
     <a id="backToPlay" href="/chess">← Play a game</a>
     <a id="viewWeights" href="/weights">View learned weights →</a>
