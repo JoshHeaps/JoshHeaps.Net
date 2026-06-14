@@ -54,6 +54,12 @@ jobs:
           name: site-publish
           path: publish
 
+      # GitHub artifacts don't preserve the Unix executable bit, so Stockfish (the only file
+      # the app spawns as a subprocess) arrives non-executable. Restore 755 here; rsync -a then
+      # carries it to the server, where the service user can run it regardless of file owner.
+      - name: Restore Stockfish executable bit
+        run: chmod 755 publish/Resources/stockfish-ubuntu-x86-64-sse41-popcnt
+
       - name: Prepare SSH
         run: |
           install -m 700 -d ~/.ssh
