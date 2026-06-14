@@ -36,6 +36,13 @@ public sealed class ChessEngineOptions
     /// redeploy. Override via the <c>ChessEngine__AutoTrain</c> environment variable.
     /// </summary>
     public bool AutoTrain { get; set; } = true;
+
+    /// <summary>
+    /// How many auto-training games run concurrently (when <see cref="AutoTrain"/> is on). This is
+    /// the starting value; it can be changed at runtime from the website. Override the default via
+    /// the <c>ChessEngine__AutoTrainGameCount</c> environment variable.
+    /// </summary>
+    public int AutoTrainGameCount { get; set; } = 2;
 }
 
 /// <summary>Creates the configured <see cref="IChessEngine"/> per game.</summary>

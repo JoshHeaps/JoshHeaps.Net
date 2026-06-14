@@ -23,7 +23,38 @@ const Spectate = {
         }
 
         await this.refreshGames();
+        await this.loadAutoTrainCount();
         setInterval(() => this.refreshGames(), 5000);
+    },
+
+    // Auto-training runs server-side; show its target count and let it be changed here.
+    async loadAutoTrainCount() {
+        const input = document.getElementById("autoTrainCount");
+        if (!input) return;
+
+        try {
+            const response = await fetch("/api/chess/autotrain");
+            const data = await response.json();
+            input.max = data.max;
+            // Don't clobber the value while the user is editing it.
+            if (document.activeElement !== input)
+                input.value = data.count;
+        } catch {
+            // Leave the control as-is if auto-training status can't be read.
+        }
+    },
+
+    async setAutoTrainCount() {
+        const input = document.getElementById("autoTrainCount");
+        const count = Math.max(0, parseInt(input.value, 10) || 0);
+
+        try {
+            const response = await fetch(`/api/chess/autotrain?count=${count}`, { method: "POST" });
+            const data = await response.json();
+            input.value = data.count;
+        } catch (err) {
+            console.error("❌ Could not set the auto-training game count.", err);
+        }
     },
 
     async startCpuGame() {
