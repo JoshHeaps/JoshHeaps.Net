@@ -4,6 +4,7 @@ using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using System.Collections.Concurrent;
 
 namespace JoshHeaps.Net.Controllers;
 
@@ -15,14 +16,24 @@ public class ChessController(
     IChessEngineFactory engineFactory,
     IComputerMoveOrchestrator orchestrator,
     ILearnedWeightsStore weightsStore,
-    IGameStore gameStore,
-    ISelfPlayCoordinator selfPlay,
-    AutoTrainingSettings autoTraining,
     IHubContext<ChessHub> chessHub) : ControllerBase
 {
+    /// <summary>
+    /// Store of ongoing games.
+    /// </summary>
+    private static readonly ConcurrentDictionary<Guid, GameState> _games = [];
+    private static readonly ConcurrentDictionary<Guid, Task> _gameRemovalTasks = [];
+    private static readonly ConcurrentDictionary<Guid, CancellationTokenSource> _gameRemovalCancellationTokens = [];
+
     private static readonly TimeSpan _computerGameTimeout = TimeSpan.FromHours(1);
     private static readonly TimeSpan _multiplayerGameTimeout = TimeSpan.FromDays(1);
     private static readonly TimeSpan _gameCleanupTimeout = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan _selfPlayMoveDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan _selfPlayResultTimeout = TimeSpan.FromSeconds(30);
+
+    // Plies of random legal moves at the start of a training game, so self-play and
+    // engine-vs-engine games explore different lines instead of replaying one game.
+    private const int _openingRandomPlies = 4;
 
     /// <summary>
     /// Create a new chess game and store it in-memory.
@@ -32,7 +43,7 @@ public class ChessController(
     public ActionResult CreateGame(int difficulty = 20, string color = "random")
     {
         var gameState = chessService.CreateNewGame();
-        gameStore.Add(gameState);
+        _games[gameState.GameId] = gameState;
 
         gameState.IsVsComputer = true;
         gameState.WhiteJoined = true;
@@ -67,7 +78,7 @@ public class ChessController(
             });
         }
 
-        gameStore.ScheduleRemove(gameState.GameId, _computerGameTimeout);
+        ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
 
         return Ok(new
         {
@@ -91,13 +102,31 @@ public class ChessController(
         int? whiteSkill = null,
         int? blackSkill = null)
     {
-        var config = new SelfPlayConfig(
-            ParseEngineKind(whiteEngine), whiteSkill ?? difficulty,
-            ParseEngineKind(blackEngine), blackSkill ?? difficulty);
+        var whiteKind = ParseEngineKind(whiteEngine);
+        var blackKind = ParseEngineKind(blackEngine);
 
-        var (gameId, _) = selfPlay.StartGame(config);
+        var gameState = chessService.CreateNewGame();
+        _games[gameState.GameId] = gameState;
 
-        return Ok(new { GameId = gameId });
+        gameState.IsVsComputer = true;
+        gameState.IsComputerVsComputer = true;
+        gameState.WhiteJoined = true;
+        gameState.BlackJoined = true;
+        gameState.WhitePlayerId = Guid.NewGuid();
+        gameState.BlackPlayerId = Guid.NewGuid();
+        gameState.WhiteEngineKind = whiteKind;
+        gameState.BlackEngineKind = blackKind;
+        gameState.WhiteComputer = engineFactory.Create(whiteSkill ?? difficulty, whiteKind);
+        gameState.BlackComputer = engineFactory.Create(blackSkill ?? difficulty, blackKind);
+
+        // When the learned engine is playing, attach a trainer so the outcome can train it.
+        if (whiteKind == ChessEngineKind.CustomLearned || blackKind == ChessEngineKind.CustomLearned)
+            gameState.Trainer = weightsStore.CreateTrainer();
+
+        ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
+        StartSelfPlay(gameState);
+
+        return Ok(new { gameState.GameId });
     }
 
     private static ChessEngineKind ParseEngineKind(string value) => value.ToLowerInvariant() switch
@@ -108,25 +137,6 @@ public class ChessController(
     };
 
     /// <summary>
-    /// Current number of background auto-training games (and the allowed maximum). Auto-training
-    /// itself runs only outside Development; this reflects the target the service is keeping.
-    /// </summary>
-    [HttpGet("autotrain")]
-    public ActionResult GetAutoTrain() =>
-        Ok(new { count = autoTraining.GameCount, max = AutoTrainingSettings.MaxGames });
-
-    /// <summary>
-    /// Set how many auto-training games run concurrently (clamped to 0..max; 0 pauses training).
-    /// Takes effect live — the background service tops up or drains toward the new count.
-    /// </summary>
-    [HttpPost("autotrain")]
-    public ActionResult SetAutoTrain([FromQuery] int count)
-    {
-        autoTraining.GameCount = count;   // clamped inside the setter
-        return Ok(new { count = autoTraining.GameCount, max = AutoTrainingSettings.MaxGames });
-    }
-
-    /// <summary>
     /// Joins the "pool" of chess players.
     /// Test code expects to receive a GUID for the player
     /// and a bool indicating if they are White.
@@ -135,12 +145,12 @@ public class ChessController(
     public ActionResult JoinGame()
     {
         Console.WriteLine("joining game");
-        GameState? gameState = gameStore.All.FirstOrDefault(g => g.IsOpen);
+        GameState? gameState = _games.Values.FirstOrDefault(g => g.IsOpen);
 
         if (gameState == null)
         {
             gameState = chessService.CreateNewGame();
-            gameStore.Add(gameState);
+            _games[gameState.GameId] = gameState;
         }
 
         Guid playerId = Guid.NewGuid();
@@ -158,7 +168,7 @@ public class ChessController(
             isWhite = false;
         }
 
-        gameStore.ScheduleRemove(gameState.GameId, _multiplayerGameTimeout);
+        ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
         return Ok(new
         {
@@ -174,7 +184,7 @@ public class ChessController(
     [HttpGet("active")]
     public ActionResult GetActiveGames()
     {
-        var activeGames = gameStore.All
+        var activeGames = _games.Values
             // In-progress games, plus finished computer-vs-computer games still in their result window.
             .Where(g => g.WhiteJoined && g.BlackJoined
                 && ((!g.IsCheckmate && !g.IsStalemate && !g.IsForfeited && !g.IsThreefoldRepetition) || g.IsComputerVsComputer))
@@ -202,7 +212,7 @@ public class ChessController(
     public ActionResult GetLearnedWeights()
     {
         var names = new[] { "Pawn", "Knight", "Bishop", "Rook", "Queen", "King" };
-        var featureNames = new[] { "Mobility N", "Mobility B", "Mobility R", "Mobility Q", "Passed", "Pawn links", "King safety" };
+        var featureNames = new[] { "Mobility N", "Mobility B", "Mobility R", "Mobility Q", "Passed", "Isolated", "Doubled", "King safety" };
 
         var snapshot = weightsStore.Snapshot();
 
@@ -220,7 +230,7 @@ public class ChessController(
     [HttpGet("{gameId}")]
     public ActionResult GetGameState(Guid gameId)
     {
-        if (!gameStore.TryGet(gameId, out var gameState))
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         return Ok(gameState.ToDto());
@@ -233,7 +243,7 @@ public class ChessController(
     [HttpPost("move")]
     public async Task<ActionResult> MakeMove([FromBody] MoveDto moveDto)
     {
-        if (!gameStore.TryGet(moveDto.GameId, out var gameState))
+        if (!_games.TryGetValue(moveDto.GameId, out var gameState))
             return NotFound("Game not found");
 
         // Check if player is authorized to move
@@ -260,11 +270,11 @@ public class ChessController(
         var isGameOver = result.IsCheckmate || result.IsStalemate || result.IsThreefoldRepetition;
 
         if (isGameOver)
-            gameStore.ScheduleRemove(gameState.GameId, _gameCleanupTimeout);
+            ScheduleRemoveGame(gameState.GameId, _gameCleanupTimeout);
         else if (gameState.IsVsComputer)
-            gameStore.ScheduleRemove(gameState.GameId, _computerGameTimeout);
+            ScheduleRemoveGame(gameState.GameId, _computerGameTimeout);
         else
-            gameStore.ScheduleRemove(gameState.GameId, _multiplayerGameTimeout);
+            ScheduleRemoveGame(gameState.GameId, _multiplayerGameTimeout);
 
         var state = gameState.ToDto();
 
@@ -291,7 +301,7 @@ public class ChessController(
     [HttpPost("forfeit")]
     public async Task<ActionResult> Forfeit([FromBody] ForfeitDto forfeit)
     {
-        if (!gameStore.TryGet(forfeit.GameId, out var gameState))
+        if (!_games.TryGetValue(forfeit.GameId, out var gameState))
             return NotFound("Game not found");
 
         if (gameState.IsCheckmate || gameState.IsStalemate || gameState.IsForfeited)
@@ -309,7 +319,7 @@ public class ChessController(
         await chessHub.Clients.Group(gameState.GameId.ToString())
             .SendAsync("ReceiveGameOver", gameState.GameId.ToString(), gameState.Winner.ToString(), "forfeit");
 
-        gameStore.ScheduleRemove(gameState.GameId, _gameCleanupTimeout);
+        ScheduleRemoveGame(gameState.GameId, _gameCleanupTimeout);
 
         return Ok();
     }
@@ -320,7 +330,7 @@ public class ChessController(
     [HttpGet("{gameId}/pgn")]
     public ActionResult GetPgn(Guid gameId)
     {
-        if (!gameStore.TryGet(gameId, out var gameState))
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         return Content(gameState.ToPgn(), "application/x-chess-pgn");
@@ -332,7 +342,7 @@ public class ChessController(
     [HttpGet("{gameId}/legalMoves/{pieceId}")]
     public ActionResult GetLegalMoves(Guid gameId, string pieceId)
     {
-        if (!gameStore.TryGet(gameId, out var gameState))
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         var moves = chessService.GetLegalMovesForPiece(gameState, pieceId);
@@ -346,7 +356,7 @@ public class ChessController(
     [HttpGet("{gameId}/legalMoves")]
     public ActionResult GetAllLegalMoves(Guid gameId)
     {
-        if (!gameStore.TryGet(gameId, out var gameState))
+        if (!_games.TryGetValue(gameId, out var gameState))
             return NotFound("Game not found");
 
         var allMoves = chessService.GetAllLegalMoves(gameState)
@@ -359,4 +369,180 @@ public class ChessController(
         return Ok(allMoves);
     }
 
+    /// <summary>
+    /// Drives a computer-vs-computer game: keeps asking the side-to-move's engine for its
+    /// move (which applies and broadcasts it) until the game ends or is removed. Training
+    /// games get a randomized opening and feed their result back into the learned weights.
+    /// </summary>
+    private void StartSelfPlay(GameState gameState)
+    {
+        queue.Queue(async () =>
+        {
+            // Give spectators a moment to join the SignalR group before the first move.
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            // Training games open with random moves so they don't replay the same line.
+            if (gameState.Trainer != nint.Zero)
+                for (int i = 0; i < _openingRandomPlies && _games.ContainsKey(gameState.GameId) && !IsGameOver(gameState); i++)
+                {
+                    await orchestrator.PlayRandomMoveAsync(gameState);
+                    await Task.Delay(_selfPlayMoveDelay);
+                }
+
+            while (_games.ContainsKey(gameState.GameId) && !IsGameOver(gameState))
+            {
+                try
+                {
+                    await orchestrator.PlayAsync(gameState);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Self-play game {gameState.GameId} stopped: {ex.Message}");
+                    break;
+                }
+
+                await Task.Delay(_selfPlayMoveDelay);
+            }
+
+            ApplyLearning(gameState);
+
+            // Leave the finished game in place briefly so spectators can see the result.
+            if (_games.ContainsKey(gameState.GameId))
+                ScheduleRemoveGame(gameState.GameId, _selfPlayResultTimeout);
+        });
+    }
+
+    private static bool IsGameOver(GameState gameState) =>
+        gameState.IsCheckmate || gameState.IsStalemate || gameState.IsThreefoldRepetition || gameState.IsForfeited;
+
+    /// <summary>
+    /// Feeds a finished training game's result into the learned weights, then frees the
+    /// trainer. Both sides teach the table — the winner's squares/features up, the loser's
+    /// down. A checkmate is a full-strength result; a material-imbalance draw is a half-
+    /// strength win for the lower-material side (holding a draw while down material is a
+    /// success; only drawing while up is a failure). A balanced draw, forfeit, or unfinished
+    /// game teaches nothing (but the trainer is still freed).
+    /// </summary>
+    private void ApplyLearning(GameState gameState)
+    {
+        if (gameState.Trainer == nint.Zero)
+            return;
+
+        if (TryDetermineOutcome(gameState, out var winner, out var weight))
+            weightsStore.ApplyResult(gameState.Trainer, winner, weight);
+
+        weightsStore.DestroyTrainer(gameState.Trainer);
+        gameState.Trainer = nint.Zero;
+    }
+
+    /// <summary>
+    /// Determines the trainable outcome of a finished game: the winning color and the reward
+    /// weight. Returns false when the game teaches nothing (balanced draw, forfeit, unfinished).
+    /// </summary>
+    private static bool TryDetermineOutcome(GameState gameState, out PieceColor winner, out double weight)
+    {
+        winner = PieceColor.White;
+        weight = 1.0;
+
+        if (gameState.IsCheckmate)
+        {
+            // The side to move is the mated one, so the winner is the other color.
+            winner = gameState.CurrentPlayer == PieceColor.White ? PieceColor.Black : PieceColor.White;
+            return true;
+        }
+
+        if (gameState.IsStalemate || gameState.IsThreefoldRepetition)
+        {
+            var (white, black) = MaterialCounts(gameState);
+
+            if (white == black)
+                return false;                 // a balanced draw carries no signal
+
+            winner = white < black ? PieceColor.White : PieceColor.Black;
+            weight = 0.5;
+            return true;
+        }
+
+        return false;                         // forfeit / unfinished
+    }
+
+    /// <summary>Total non-king material per side (P=1, N=B=3, R=5, Q=9), for draw adjudication.</summary>
+    private static (int white, int black) MaterialCounts(GameState gameState)
+    {
+        int white = 0, black = 0;
+
+        for (int row = 0; row < 8; row++)
+            for (int col = 0; col < 8; col++)
+            {
+                var piece = gameState.Board[row, col];
+
+                if (piece is null)
+                    continue;
+
+                int value = piece.Type switch
+                {
+                    PieceType.Pawn => 1,
+                    PieceType.Knight => 3,
+                    PieceType.Bishop => 3,
+                    PieceType.Rook => 5,
+                    PieceType.Queen => 9,
+                    _ => 0
+                };
+
+                if (piece.Color == PieceColor.White)
+                    white += value;
+                else
+                    black += value;
+            }
+
+        return (white, black);
+    }
+
+    private static void ScheduleRemoveGame(Guid id, TimeSpan delay)
+    {
+        if (_gameRemovalCancellationTokens.TryRemove(id, out var oldCts))
+        {
+            oldCts.Cancel();
+            oldCts.Dispose();
+        }
+
+        var cts = new CancellationTokenSource();
+        _gameRemovalCancellationTokens[id] = cts;
+
+        _gameRemovalTasks[id] = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay, cts.Token);
+
+                if (_games.TryGetValue(id, out var game))
+                {
+                    if (game.WhiteComputer is not null)
+                        await game.WhiteComputer.DisposeAsync();
+                    if (game.BlackComputer is not null)
+                        await game.BlackComputer.DisposeAsync();
+
+                    // Free the trainer if the game never reached ApplyLearning (e.g. timed out).
+                    // The native ABI is shared via CustomChessEngine's import resolver.
+                    if (game.Trainer != nint.Zero)
+                    {
+                        CustomChessEngine.NativeMethods.trainer_destroy(game.Trainer);
+                        game.Trainer = nint.Zero;
+                    }
+                }
+
+                _games.Remove(id, out _);
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                if (_gameRemovalCancellationTokens.TryGetValue(id, out var currentCts) && currentCts == cts)
+                {
+                    _gameRemovalCancellationTokens.TryRemove(id, out _);
+                }
+
+                cts.Dispose();
+            }
+        });
+    }
 }
