@@ -152,9 +152,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\src\chess_engine.cpp" />
-    <ClCompile Include="..\src\eval.cpp" />
-    <ClCompile Include="..\src\search.cpp" />
-    <ClCompile Include="..\src\learned_model.cpp" />
     <ClCompile Include="..\src\bitboard.cpp" />
     <ClCompile Include="..\src\zobrist.cpp" />
     <ClCompile Include="..\src\position.cpp" />
@@ -164,9 +161,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\chess_engine.h" />
-    <ClInclude Include="..\src\eval.h" />
-    <ClInclude Include="..\src\search.h" />
-    <ClInclude Include="..\src\learned_model.h" />
     <ClInclude Include="..\src\types.h" />
     <ClInclude Include="..\src\bitboard.h" />
     <ClInclude Include="..\src\zobrist.h" />

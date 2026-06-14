@@ -23,38 +23,7 @@ const Spectate = {
         }
 
         await this.refreshGames();
-        await this.loadAutoTrainCount();
         setInterval(() => this.refreshGames(), 5000);
-    },
-
-    // Auto-training runs server-side; show its target count and let it be changed here.
-    async loadAutoTrainCount() {
-        const input = document.getElementById("autoTrainCount");
-        if (!input) return;
-
-        try {
-            const response = await fetch("/api/chess/autotrain");
-            const data = await response.json();
-            input.max = data.max;
-            // Don't clobber the value while the user is editing it.
-            if (document.activeElement !== input)
-                input.value = data.count;
-        } catch {
-            // Leave the control as-is if auto-training status can't be read.
-        }
-    },
-
-    async setAutoTrainCount() {
-        const input = document.getElementById("autoTrainCount");
-        const count = Math.max(0, parseInt(input.value, 10) || 0);
-
-        try {
-            const response = await fetch(`/api/chess/autotrain?count=${count}`, { method: "POST" });
-            const data = await response.json();
-            input.value = data.count;
-        } catch (err) {
-            console.error("❌ Could not set the auto-training game count.", err);
-        }
     },
 
     async startCpuGame() {
@@ -123,7 +92,7 @@ const Spectate = {
         const header = document.createElement("div");
         header.className = "gameCardHeader";
         header.id = `header-${game.gameId}`;
-        this.renderHeader(header, this.games.get(game.gameId), game.currentPlayer, game.moveCount, game.isCheck);
+        header.textContent = this.headerText(this.games.get(game.gameId), game.currentPlayer, game.moveCount, game.isCheck);
         card.appendChild(header);
 
         const board = document.createElement("div");
@@ -217,23 +186,7 @@ const Spectate = {
         const header = document.getElementById(`header-${gameId}`);
 
         if (stored && header)
-            this.renderHeader(header, stored, currentPlayer, moveCount, isCheck);
-    },
-
-    // Renders the header as a base text span plus a "check" tag that always occupies its slot
-    // (hidden when not in check), so toggling check never re-centers or wraps the line.
-    renderHeader(header, stored, currentPlayer, moveCount, isCheck) {
-        const showCheck = !stored.result && isCheck;
-        header.innerHTML = "";
-
-        const main = document.createElement("span");
-        main.textContent = this.headerText(stored, currentPlayer, moveCount);
-
-        const tag = document.createElement("span");
-        tag.className = showCheck ? "checkTag show" : "checkTag";
-        tag.textContent = "• check";
-
-        header.append(main, tag);
+            header.textContent = this.headerText(stored, currentPlayer, moveCount, isCheck);
     },
 
     gameLabel(stored) {
@@ -252,11 +205,12 @@ const Spectate = {
         }
     },
 
-    headerText(stored, currentPlayer, moveCount) {
+    headerText(stored, currentPlayer, moveCount, isCheck) {
         if (stored.result)
             return `${this.gameLabel(stored)} · move ${moveCount} · final`;
 
-        return `${this.gameLabel(stored)} · move ${moveCount} · ${currentPlayer} to move`;
+        const check = isCheck ? " • check" : "";
+        return `${this.gameLabel(stored)} · move ${moveCount} · ${currentPlayer} to move${check}`;
     },
 
     resultTextFromState(state) {
@@ -274,42 +228,34 @@ const Spectate = {
 
         if (!card) return;
 
-        // The result and Copy PGN button live in an overlay anchored over the board so showing
-        // them at game end never changes the card's height (which would shift the whole grid).
-        let overlay = card.querySelector(".gameOverlay");
+        let banner = card.querySelector(".gameResult");
 
         if (!text) {
-            overlay?.remove();
+            banner?.remove();
+            card.querySelector(".copyPgnBtn")?.remove();
             card.classList.remove("over");
             return;
         }
 
-        if (!overlay) {
-            overlay = document.createElement("div");
-            overlay.className = "gameOverlay";
-
-            const banner = document.createElement("div");
+        if (!banner) {
+            banner = document.createElement("div");
             banner.className = "gameResult";
-            overlay.appendChild(banner);
-
-            card.appendChild(overlay);
+            card.appendChild(banner);
         }
 
-        overlay.querySelector(".gameResult").textContent = text;
+        banner.textContent = text;
         card.classList.add("over");
         this.addCopyPgn(gameId, card);
     },
 
     addCopyPgn(gameId, card) {
-        const overlay = card.querySelector(".gameOverlay");
-
-        if (!overlay || overlay.querySelector(".copyPgnBtn")) return;
+        if (card.querySelector(".copyPgnBtn")) return;
 
         const btn = document.createElement("button");
         btn.className = "copyPgnBtn";
         btn.textContent = "Copy PGN";
         btn.onclick = (event) => { event.stopPropagation(); this.copyPgn(gameId); };
-        overlay.appendChild(btn);
+        card.appendChild(btn);
 
         // Prefetch now (while the game is still in memory) so copy works during the
         // brief window before the finished game is cleaned up.

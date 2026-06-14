@@ -88,29 +88,16 @@ html, body {
     cursor: pointer;
 }
 
-/* Overlaid on the bottom of the card at game end, so it never adds to the card's height
-   (which would shift the whole grid as games finish and are cleared). */
-.gameOverlay {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.9rem 1rem;
-    background-color: rgba(20, 20, 22, 0.92);
-    border-radius: 0 0 10px 10px;
-}
-
 .gameResult {
     text-align: center;
     font-weight: bold;
     color: #8cd5ed;
+    margin-top: 0.75rem;
 }
 
 .copyPgnBtn {
+    display: block;
+    margin: 0.75rem auto 0;
     background-color: #8cd5ed;
     color: #262626;
     border: 0;
@@ -167,25 +154,6 @@ body.fullscreen-open {
     text-align: center;
     font-weight: bold;
     margin-bottom: 0.75rem;
-    /* Reserve two lines so the header doesn't reflow as the move count gains digits,
-       the side-to-move text changes, or the check tag toggles. */
-    line-height: 1.3;
-    min-height: 2.6em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Always occupies its space (it's only hidden, not removed) so toggling "check" never
-   re-centers or wraps the header line. */
-.checkTag {
-    margin-left: 0.4rem;
-    color: #e8a04a;
-    visibility: hidden;
-}
-
-.checkTag.show {
-    visibility: visible;
 }
 
 .miniBoard {

@@ -54,12 +54,6 @@ jobs:
           name: site-publish
           path: publish
 
-      # GitHub artifacts don't preserve the Unix executable bit, so Stockfish (the only file
-      # the app spawns as a subprocess) arrives non-executable. Restore 755 here; rsync -a then
-      # carries it to the server, where the service user can run it regardless of file owner.
-      - name: Restore Stockfish executable bit
-        run: chmod 755 publish/Resources/stockfish-ubuntu-x86-64-sse41-popcnt
-
       - name: Prepare SSH
         run: |
           install -m 700 -d ~/.ssh
@@ -69,10 +63,7 @@ jobs:
 
       - name: Rsync to server
         run: |
-          # --exclude chess-data: never let --delete remove the learned-engine training
-          # data, which lives in the deploy dir unless ChessEngine__WeightsPath is set
-          # elsewhere. publish/ never contains it, so without this --delete wipes it every deploy.
-          rsync -az --delete --exclude 'chess-data' -e "ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_rsa" \
+          rsync -az --delete -e "ssh -p ${{ secrets.SSH_PORT || 22 }} -i ~/.ssh/id_rsa" \
             publish/ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.TARGET_DIR }}/
 
       - name: Reload and restart service
