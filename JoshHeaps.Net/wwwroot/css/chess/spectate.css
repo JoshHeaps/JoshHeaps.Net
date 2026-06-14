@@ -156,6 +156,18 @@ body.fullscreen-open {
     margin-bottom: 0.75rem;
 }
 
+/* Always occupies its space (it's only hidden, not removed) so toggling "check" never
+   re-centers or wraps the header line. */
+.checkTag {
+    margin-left: 0.4rem;
+    color: #e8a04a;
+    visibility: hidden;
+}
+
+.checkTag.show {
+    visibility: visible;
+}
+
 .miniBoard {
     width: 100%;
     aspect-ratio: 1 / 1;

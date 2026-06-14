@@ -123,7 +123,7 @@ const Spectate = {
         const header = document.createElement("div");
         header.className = "gameCardHeader";
         header.id = `header-${game.gameId}`;
-        header.textContent = this.headerText(this.games.get(game.gameId), game.currentPlayer, game.moveCount, game.isCheck);
+        this.renderHeader(header, this.games.get(game.gameId), game.currentPlayer, game.moveCount, game.isCheck);
         card.appendChild(header);
 
         const board = document.createElement("div");
@@ -217,7 +217,23 @@ const Spectate = {
         const header = document.getElementById(`header-${gameId}`);
 
         if (stored && header)
-            header.textContent = this.headerText(stored, currentPlayer, moveCount, isCheck);
+            this.renderHeader(header, stored, currentPlayer, moveCount, isCheck);
+    },
+
+    // Renders the header as a base text span plus a "check" tag that always occupies its slot
+    // (hidden when not in check), so toggling check never re-centers or wraps the line.
+    renderHeader(header, stored, currentPlayer, moveCount, isCheck) {
+        const showCheck = !stored.result && isCheck;
+        header.innerHTML = "";
+
+        const main = document.createElement("span");
+        main.textContent = this.headerText(stored, currentPlayer, moveCount);
+
+        const tag = document.createElement("span");
+        tag.className = showCheck ? "checkTag show" : "checkTag";
+        tag.textContent = "• check";
+
+        header.append(main, tag);
     },
 
     gameLabel(stored) {
@@ -236,12 +252,11 @@ const Spectate = {
         }
     },
 
-    headerText(stored, currentPlayer, moveCount, isCheck) {
+    headerText(stored, currentPlayer, moveCount) {
         if (stored.result)
             return `${this.gameLabel(stored)} · move ${moveCount} · final`;
 
-        const check = isCheck ? " • check" : "";
-        return `${this.gameLabel(stored)} · move ${moveCount} · ${currentPlayer} to move${check}`;
+        return `${this.gameLabel(stored)} · move ${moveCount} · ${currentPlayer} to move`;
     },
 
     resultTextFromState(state) {
