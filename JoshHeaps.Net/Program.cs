@@ -1,6 +1,7 @@
 using JoshHeaps.Net.Hubs;
 using JoshHeaps.Net.Services.Implementations;
 using JoshHeaps.Net.Services.Interfaces;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +30,12 @@ builder.Services.AddSingleton<IComputerMoveOrchestrator, ComputerMoveOrchestrato
 builder.Services.AddSingleton<IGameStore, GameStore>();
 builder.Services.AddSingleton<ISelfPlayCoordinator, SelfPlayCoordinator>();
 builder.Services.AddSingleton<AutoTrainingSettings>();
+
+builder.Services.Configure<EchoRoundSettings>(configuration.GetSection(EchoRoundSettings.SectionName));
+builder.Services.AddSingleton(provider =>
+    provider.GetRequiredService<IOptions<EchoRoundSettings>>().Value);
+builder.Services.AddSingleton<IEchoRoomStore, EchoRoomStore>();
+builder.Services.AddHostedService<EchoRoundService>();
 
 if (!builder.Environment.IsDevelopment())
 {
@@ -71,5 +78,7 @@ app.MapRazorPages();
 app.MapControllers();
 
 app.MapHub<ChessHub>("/chessHub");
+
+app.MapHub<EchoHub>("/echoHub");
 
 app.Run();

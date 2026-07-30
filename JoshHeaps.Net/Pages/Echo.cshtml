@@ -1,0 +1,70 @@
+@page
+@model JoshHeaps.Net.Pages.EchoModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Echo";
+}
+
+<div id="echoHeader">
+    <h1>Echo</h1>
+    <p class="echo-blurb">
+        Two devices measure the distance between them by chirping at each other and timing the answer.
+        Each one records continuously and only ever compares arrivals inside its own recording, so no
+        clock synchronisation is needed and the unknown audio latency cancels out.
+    </p>
+    <p class="echo-privacy">Only sample numbers leave your device. The recording never does.</p>
+</div>
+
+<div id="echoControls">
+    <label>Room <input id="echoRoom" type="text" maxlength="6" autocomplete="off" spellcheck="false" /></label>
+    <label>Name <input id="echoName" type="text" maxlength="16" placeholder="this device" autocomplete="off" /></label>
+    <label>
+        Speaker to mic (m)
+        <input id="echoEpsilon" type="number" min="0" max="0.5" step="0.01" />
+    </label>
+    <button id="echoJoin">Join and listen</button>
+    <button id="echoLeave" hidden>Leave</button>
+</div>
+
+<p id="echoStatus" class="echo-status">Pick a room, then open the same room on a second device.</p>
+<p class="echo-share">Join link: <a id="echoShareLink" href="#"></a></p>
+<div id="echoWarnings"></div>
+
+<div id="echoReadout" class="echo-readout"><span class="echo-readout-idle">not measuring</span></div>
+
+<div id="echoPanels">
+    <section class="echo-panel">
+        <h2>Devices</h2>
+        <ul id="echoRoster"></ul>
+    </section>
+    <section class="echo-panel">
+        <h2>Ranges</h2>
+        <div id="echoPairs"></div>
+    </section>
+    <section class="echo-panel">
+        <h2>Timing</h2>
+        <p class="echo-hint">How far each chirp landed from its slot. Steady means the arrivals are being matched to the right devices.</p>
+        <div id="echoDiagnostics"></div>
+    </section>
+</div>
+
+<section class="echo-panel echo-panel-wide">
+    <h2>Matched filter</h2>
+    <p class="echo-hint">Each spike is a chirp arriving. The bright one is this device hearing itself.</p>
+    <canvas id="echoTrace"></canvas>
+</section>
+
+<a class="echo-back" href="/">&larr; Back</a>
+
+@section Scripts {
+    <script src="~/js/signalr/signalr.min.js"></script>
+    <script src="~/js/EchoScripts/EchoDsp.js"></script>
+    <script src="~/js/EchoScripts/EchoAudio.js"></script>
+    <script src="~/js/EchoScripts/EchoSession.js"></script>
+    <script src="~/js/EchoScripts/echoMain.js"></script>
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/variables.css?v=@ViewData["cssVersion"]" />
+    <link rel="stylesheet" href="~/css/echo/echo.css?v=@ViewData["cssVersion"]" />
+}
